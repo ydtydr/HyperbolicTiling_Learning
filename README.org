@@ -1,15 +1,14 @@
 ** Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models
-[[file:H266.jpg]]
+[[file:H266.png]]
 
 **** Authors:
-* [Tao Yu](http://www.cs.cornell.edu/~tyu/)
-* [Christopher De Sa](http://www.cs.cornell.edu/~cdesa/)
+* [[http://www.cs.cornell.edu/~tyu/][Tao Yu]]
+* [[http://www.cs.cornell.edu/~cdesa/][Christopher De Sa]]
 
 *** Introduction
 This repo contains official code (learning part in PyTorch) and models for the NeurIPS 2019 paper,
-[Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models](). We build the models based on
-PyTorch implementation of [[https://papers.nips.cc/paper/7213-poincare-embeddings-for-learning-hierarchical-representations]
-[Poincaré Embeddings for Learning Hierarchical Representations]], which under the License. However, we preserve the
+[[https://][Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models]]. We build the models based on
+PyTorch implementation of [[https://papers.nips.cc/paper/7213-poincare-embeddings-for-learning-hierarchical-representations][Poincaré Embeddings for Learning Hierarchical Representations]], which under the License. However, we preserve the
 rights for commerical purpose of our tiling-based models.
 
 ** Installation
