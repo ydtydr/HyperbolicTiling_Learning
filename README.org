@@ -1,9 +1,9 @@
 ** Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models
-[[file:H266.png]]
 
 **** Authors:
-* [[http://www.cs.cornell.edu/~tyu/][Tao Yu]]
-* [[http://www.cs.cornell.edu/~cdesa/][Christopher De Sa]]
+- [[http://www.cs.cornell.edu/~tyu/][Tao Yu]]
+- [[http://www.cs.cornell.edu/~cdesa/][Christopher De Sa]]
+[[file:H266.png]]
 
 *** Introduction
 This repo contains official code (learning part in PyTorch) and models for the NeurIPS 2019 paper,
