@@ -1,0 +1,63 @@
+** Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models
+[[file:H266.jpg]]
+
+**** Authors:
+* [Tao Yu](http://www.cs.cornell.edu/~tyu/)
+* [Christopher De Sa](http://www.cs.cornell.edu/~cdesa/)
+
+*** Introduction
+This repo contains official code (learning part in PyTorch) and models for the NeurIPS 2019 paper,
+[Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models](). We build the models based on
+PyTorch implementation of [[https://papers.nips.cc/paper/7213-poincare-embeddings-for-learning-hierarchical-representations]
+[Poincaré Embeddings for Learning Hierarchical Representations]], which under the License. However, we preserve the
+rights for commerical purpose of our tiling-based models.
+
+** Installation
+Simply clone this repository via
+#+BEGIN_SRC sh
+  git clone https://github.com/ydtydr/HyperbolicTiling_Learning.git
+  cd HyperbolicTiling_Learning
+  conda env create -f environment.yml
+  source activate tiling
+  python setup.py build_ext --inplace
+#+END_SRC
+
+** Example: Embedding WordNet Mammals
+To embed the transitive closure of the WordNet mammals subtree, first generate the data via
+#+BEGIN_SRC sh
+  cd wordnet
+  python transitive_closure.py
+#+END_SRC
+This will generate the transitive closure of the full noun hierarchy as well as of the mammals subtree of WordNet.
+We include WordNet Nouns, Verbs, Mammmals and Gr-QC dataset in the folder.
+
+To embed the mammals subtree in the reconstruction setting (i.e., without missing data), go to the /root directory/ of the project and run
+#+BEGIN_SRC sh
+  ./train-mammals.sh
+#+END_SRC
+This shell script includes the appropriate parameter settings for the mammals subtree and saves the trained model as =mammals.pth=.
+
+An identical script to learn embeddings of the entire noun hierarchy is located at =train-nouns.sh=.
+This script contains the hyperparameter setting to reproduce the results for embeddings of [[https:][(Yu & De Sa, 2010)]].
+The hyperparameter setting to reproduce the MAP results are provided as comments in the script.
+
+The embeddings are trained via multithreaded async SGD. In the example above, the number of threads is set to a conservative
+setting (=NHTREADS=2=) which should run well even on smaller machines. On machines with many cores, increase =NTHREADS= for faster convergence.
+
+** Dependencies
+- Python 3 with NumPy
+- PyTorch
+- Scikit-Learn
+- NLTK (to generate the WordNet data)
+
+** References
+If you use our code or wish to refer to our results, please use the following BibTex entry:
+#+BEGIN_SRC bibtex
+@incollection{Yu_2019_NeurIPS_tiling,
+  title = {Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models},
+  author = {Yu, Tao and De Sa, Christopher M},
+  booktitle = {Proceedings of the 33rd Conference on Neural Information Processing Systems (NeurIPS 2019)},
+  month = {Oct.},
+  year = {2019}
+}
+#+END_SRC
