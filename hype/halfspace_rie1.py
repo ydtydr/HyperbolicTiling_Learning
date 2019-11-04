@@ -261,11 +261,6 @@ class HalfspaceRie1Distance(Function):
         uu = to_lorentz(recon_halfplane(u))
         vv = to_lorentz(recon_halfplane(v))#n*m*(d+1)
         g = g.unsqueeze(-1)
-        # squnorm = th.clamp(th.sum(uu[..., 1:] * uu[..., 1:], dim=-1), min=0)
-        # sqvnorm = th.clamp(th.sum(vv[..., 1:] * vv[..., 1:], dim=-1), min=0)
-        # sqdist = th.sum(uu[..., 1:] * vv[..., 1:], dim=-1)
-        # gu[...,:d+1] = grad(uu, vv, squnorm, sqvnorm, sqdist)
-        # gv[...,:d+1] = grad(vv, uu, sqvnorm, squnorm, sqdist)
         gu[..., :d + 1] = grad(uu, vv, self.ins)
         gv[..., :d + 1] = grad(vv, uu, self.ins)
         ###########################

@@ -3,16 +3,17 @@
 **** Authors:
 - [[http://www.cs.cornell.edu/~tyu/][Tao Yu]]
 - [[http://www.cs.cornell.edu/~cdesa/][Christopher De Sa]]
-[[file:H266.png]]
 
 *** Introduction
 This repo contains official code (learning part in PyTorch) and models for the NeurIPS 2019 paper,
-[[https://][Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models]]. We build the models based on
-PyTorch implementation of [[https://papers.nips.cc/paper/7213-poincare-embeddings-for-learning-hierarchical-representations][Poincaré Embeddings for Learning Hierarchical Representations]], which under the License. However, we preserve the
+[[https://][Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models]]. We implemented our models under the
+same frame of [[https://github.com/facebookresearch/poincare-embeddings][Poincaré Embeddings for Learning Hierarchical Representations]],
+which is licensed under =LICENSE= and [[https://creativecommons.org/licenses/by-nc/4.0/][CC-BY-NC 4.0]]. However, we preserve the
 rights for commerical purpose of our tiling-based models.
+[[file:H266.png]]
 
 ** Installation
-Simply clone this repository via
+Clone this repository and run following commands
 #+BEGIN_SRC sh
   git clone https://github.com/ydtydr/HyperbolicTiling_Learning.git
   cd HyperbolicTiling_Learning
@@ -28,20 +29,22 @@ To embed the transitive closure of the WordNet mammals subtree, first generate t
   python transitive_closure.py
 #+END_SRC
 This will generate the transitive closure of the full noun hierarchy as well as of the mammals subtree of WordNet.
-We include WordNet Nouns, Verbs, Mammmals and Gr-QC dataset in the folder.
+We also include WordNet Verbs and Gr-QC dataset in /wordnet/ folder.
 
-To embed the mammals subtree in the reconstruction setting (i.e., without missing data), go to the /root directory/ of the project and run
+To embed the mammals subtree in the reconstruction setting (i.e., without missing data), go to the /root directory/ of
+the project and run
 #+BEGIN_SRC sh
   ./train-mammals.sh
 #+END_SRC
 This shell script includes the appropriate parameter settings for the mammals subtree and saves the trained model as =mammals.pth=.
 
-An identical script to learn embeddings of the entire noun hierarchy is located at =train-nouns.sh=.
-This script contains the hyperparameter setting to reproduce the results for embeddings of [[https:][(Yu & De Sa, 2010)]].
-The hyperparameter setting to reproduce the MAP results are provided as comments in the script.
+Identical scripts to learn embeddings of Word nouns, Verbs and Gr-QC are located at =train-nouns.sh=, =train-verbs.sh=,
+=train-grqc.sh=. These scripts contain the hyperparameter setting to reproduce the results
+for embeddings of [[https:][(Yu & De Sa, 2010)]].
 
 The embeddings are trained via multithreaded async SGD. In the example above, the number of threads is set to a conservative
-setting (=NHTREADS=2=) which should run well even on smaller machines. On machines with many cores, increase =NTHREADS= for faster convergence.
+setting (=NHTREADS=2=) which should run well even on smaller machines.
+On machines with many cores, increase =NTHREADS= for faster convergence.
 
 ** Dependencies
 - Python 3 with NumPy
