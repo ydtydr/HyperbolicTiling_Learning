@@ -18,9 +18,7 @@ python3 embed.py \
        -manifold halfspace_rie \
        -dset wordnet/mammal_closure.csv \
        -batchsize 10 \
-       -eval_each 1500 \
+       -eval_each 100 \
        -sparse \
-       -norevery 1 \
-       -stre 0 \
        -train_threads 2
 

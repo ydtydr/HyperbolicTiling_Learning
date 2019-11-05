@@ -266,14 +266,14 @@ class HalfspaceRieDistance(Function):
 
     @staticmethod
     def backward(self, g):
+        u, v = self.saved_tensors
+        d = (u.size(-1) - 1) // 2
+        u[..., d - 1].clamp_(min=myeps1)
+        v[..., d - 1].clamp_(min=myeps1)
+        g = g.unsqueeze(-1).expand_as(u).clone()
+        gu = th.zeros_like(u)  # m*n*(2d+1)
+        gv = th.zeros_like(v)  # m*n*(2d+1)
         if self.optt == 1:
-            u, v = self.saved_tensors
-            d = (u.size(-1) - 1) // 2
-            u[..., d - 1].clamp_(min=myeps1)
-            v[..., d - 1].clamp_(min=myeps1)
-            g = g.unsqueeze(-1).expand_as(u).clone()
-            gu = th.zeros_like(u)  # m*n*(2d+1)
-            gv = th.zeros_like(v)  # m*n*(2d+1)
             auxli_term1 = th.div(th.ones_like(self.inside_log_1), self.inside_log_1+self.inside_log_2)*(2**(self.j1-self.j2-1)+th.div(2**(2*(self.j1-self.j2-1))*self.Xprime + 2**(self.j1-self.j2-1), self.inside_log_2)) #m*n
             auxli_term2 = th.div(2*self.upp, (u[...,d-1] * v[...,d-1]).unsqueeze(-1).expand_as(self.upp))#m*n*d
             gu[..., :d - 1] = auxli_term1.unsqueeze(-1).expand_as(u[...,:d-1]) * auxli_term2[...,:d-1]#m*n*(d-1)
@@ -282,21 +282,7 @@ class HalfspaceRieDistance(Function):
             gv[..., d - 1] = auxli_term1 * (-1 * 2 ** (self.j2 - self.j1) * auxli_term2[...,d-1]-th.div(self.Xprime,v[...,d-1]))#m*n
             guu = gu*self.ones+gv*(1-self.ones)
             gvv = gv*self.ones+gu*(1-self.ones)
-            assert gu.max() != float("Inf"), " gu max includes inf"
-            assert gv.max() != float("Inf"), " gv max includes inf"
-            assert gu.min() != float("Inf"), " gu min includes inf"
-            assert gv.min() != float("Inf"), " gv min includes inf"
-            assert th.isnan(gu).max() == 0, "gu includes NaNs"
-            assert th.isnan(gv).max() == 0, "gv includes NaNs"
-            return g * guu, g * gvv
         else:
-            u, v = self.saved_tensors
-            d = (u.size(-1) - 1) // 2
-            u[..., d - 1].clamp_(min=myeps1)
-            v[..., d - 1].clamp_(min=myeps1)
-            g = g.unsqueeze(-1).expand_as(u).clone()
-            gu = th.zeros_like(u)  # m*n*(2d+1)
-            gv = th.zeros_like(v)  # m*n*(2d+1)
             auxli_term1 = th.div(th.ones_like(self.log2t), self.log2t)*(1+th.div(self.X + 2**(-2*self.s-self.j1+self.j2), self.nomdis)) #m*n
             auxli_term2 = th.div(self.upp, (2**(self.s) * u[...,d-1] * v[...,d-1]).unsqueeze(-1).expand_as(self.upp))#m*n*d
             gu[..., :d - 1] = auxli_term1.unsqueeze(-1).expand_as(u[...,:d-1]) * auxli_term2[...,:d-1]#m*n*(d-1)
@@ -311,10 +297,10 @@ class HalfspaceRieDistance(Function):
             gvv = th.zeros_like(v)
             guu[zero_mask] = (gu*self.ones+gv*(1-self.ones))[zero_mask]
             gvv[zero_mask] = (gv*self.ones+gu*(1-self.ones))[zero_mask]
-            assert guu.max() != float("Inf"), " gu max includes inf"
-            assert gvv.max() != float("Inf"), " gv max includes inf"
-            assert guu.min() != float("Inf"), " gu min includes inf"
-            assert gvv.min() != float("Inf"), " gv min includes inf"
-            assert th.isnan(guu).max() == 0, "gu includes NaNs"
-            assert th.isnan(gvv).max() == 0, "gv includes NaNs"
-            return g * guu, g * gvv
+        assert gu.max() != float("Inf"), " gu max includes inf"
+        assert gv.max() != float("Inf"), " gv max includes inf"
+        assert gu.min() != float("Inf"), " gu min includes inf"
+        assert gv.min() != float("Inf"), " gv min includes inf"
+        assert th.isnan(gu).max() == 0, "gu includes NaNs"
+        assert th.isnan(gv).max() == 0, "gv includes NaNs"
+        return g * guu, g * gvv

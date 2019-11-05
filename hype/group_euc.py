@@ -13,7 +13,6 @@ from .manifold import Manifold
 def to_lorentz(u, u_int_matrix):
     L = th.sqrt(th.Tensor([[3, 0, 0], [0, 1, 0], [0, 0, 1]]))
     R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
-#     uu = th.matmul(L.expand_as(u_int_matrix), th.matmul(u_int_matrix.float(), th.matmul(R.expand_as(u_int_matrix), u[..., :3].unsqueeze(-1)))).squeeze(-1)
     uu = th.matmul(L.expand_as(u_int_matrix), th.matmul(u_int_matrix, th.matmul(R.expand_as(u_int_matrix), u[..., :3].unsqueeze(-1)))).squeeze(-1)
     return uu
 
@@ -171,14 +170,14 @@ def nabl(u):
 class GroupEucDistance(Function):
     @staticmethod
     def forward(self, u, u_int_matrix, v, v_int_matrix):
-#         assert th.isnan(u_int_matrix).max()==0, "u includes NaNs"
-#         assert th.isnan(v_int_matrix).max()==0, "v includes NaNs"
-#         assert th.abs(u_int_matrix).max() < 2**25, "u_int_matrix may include Inf integers"
-#         assert th.abs(v_int_matrix).max() < 2**25, "v_int_matrix may include Inf integers"
-#         assert th.abs(u).max() < 100, "u are out of F"
-#         assert th.abs(v).max() < 100, "v are out of F"
-#         assert u.max() != float('inf') and u.min() != float('inf')
-#         assert v.max() != float('inf') and v.min() != float('inf')
+        assert th.isnan(u_int_matrix).max()==0, "u includes NaNs"
+        assert th.isnan(v_int_matrix).max()==0, "v includes NaNs"
+        assert th.abs(u_int_matrix).max() < 2**25, "u_int_matrix may include Inf integers"
+        assert th.abs(v_int_matrix).max() < 2**25, "v_int_matrix may include Inf integers"
+        assert th.abs(u).max() < 100, "u are out of F"
+        assert th.abs(v).max() < 100, "v are out of F"
+        assert u.max() != float('inf') and u.min() != float('inf')
+        assert v.max() != float('inf') and v.min() != float('inf')
         if len(u)<len(v):
             u = u.expand_as(v)
             u_int_matrix = u_int_matrix.expand_as(v_int_matrix)
@@ -198,27 +197,6 @@ class GroupEucDistance(Function):
         d_c = th.matmul(u[..., :3].unsqueeze(-1).transpose(-2,-1), th.matmul(RThatQR, v[..., :3].unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float
         self.nomdis = th.sqrt(th.clamp(d_c*d_c-th.ones_like(d_c),min=myeps2))#cpu float
         outp = th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
-        #####################
-        #####################
-# #         Q = th.matmul(u_int_matrix.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix))#cpu, this may overflow, need to decompose them in some way
-#         Q11 = th.clamp(Q.narrow(-2,0,1).narrow(-1,0,1),min=myeps1)#Long tensor, cpu
-# #         self.hatQ = th.div(Q.float(), Q11.float().expand_as(Q))#cpu float
-#         self.hatQ = th.div(Q, Q11.expand_as(Q))
-#         RThatQR = th.matmul(R.expand_as(self.hatQ),th.matmul(self.hatQ, R.expand_as(self.hatQ)))#cpu float
-#         d_c = th.matmul(u[..., :3].unsqueeze(-1).transpose(-2,-1), th.matmul(RThatQR, v[..., :3].unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float
-# #         invQ11 = th.div(th.ones_like(Q11.squeeze(-1).squeeze(-1)).float(),Q11.float().squeeze(-1).squeeze(-1))#cpu float
-#         invQ11 = th.div(th.ones_like(Q11.squeeze(-1).squeeze(-1)),Q11.squeeze(-1).squeeze(-1))#cpu float
-#         self.nomdis = th.sqrt(th.clamp(d_c*d_c-invQ11*invQ11,min=myeps2))#cpu float
-# #         outp = th.log(Q11.float().squeeze(-1).squeeze(-1)) + th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
-#         outp = th.log(Q11.squeeze(-1).squeeze(-1)) + th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
-#         #####################
-# #         self.hatQ = th.matmul(u_int_matrix.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix)).double()#cpu
-# #         RThatQR = th.matmul(R.expand_as(self.hatQ),th.matmul(self.hatQ, R.expand_as(self.hatQ)))#cpu float
-# #         d_c = th.matmul(u[..., :3].unsqueeze(-1).transpose(-2,-1), th.matmul(RThatQR, v[..., :3].unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float
-# #         invQ11 = th.ones_like(d_c)#cpu float
-# #         self.nomdis = th.sqrt(th.clamp(d_c*d_c-invQ11*invQ11,min=myeps2))#cpu float
-# #         outp = th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
-#         #####################
         return outp
 
     @staticmethod
@@ -232,10 +210,10 @@ class GroupEucDistance(Function):
         vupfrac = th.matmul(nablavt, th.matmul(R,th.matmul(self.hatQ.transpose(-2,-1), th.matmul(R,u[..., :3].unsqueeze(-1))))).squeeze(-1)
         gu = th.div(uupfrac,self.nomdis.unsqueeze(-1).expand_as(uupfrac))
         gv = th.div(vupfrac,self.nomdis.unsqueeze(-1).expand_as(vupfrac))
-#         assert gu.max() != float("Inf"), " gu max includes inf"
-#         assert gv.max() != float("Inf"), " gv max includes inf"
-#         assert gu.min() != float("Inf"), " gu min includes inf"
-#         assert gv.min() != float("Inf"), " gv min includes inf"
-#         assert th.isnan(gu).max() == 0, "gu includes NaNs"
-#         assert th.isnan(gv).max() == 0, "gv includes NaNs"
+        assert gu.max() != float("Inf"), " gu max includes inf"
+        assert gv.max() != float("Inf"), " gv max includes inf"
+        assert gu.min() != float("Inf"), " gu min includes inf"
+        assert gv.min() != float("Inf"), " gv min includes inf"
+        assert th.isnan(gu).max() == 0, "gu includes NaNs"
+        assert th.isnan(gv).max() == 0, "gv includes NaNs"
         return g * gu, None, g * gv, None

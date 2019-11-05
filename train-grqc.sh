@@ -18,8 +18,6 @@ python3 embed.py \
        -manifold group_rie_high \
        -dset wordnet/grqc.csv \
        -batchsize 10 \
-       -eval_each 2500 \
+       -eval_each 100 \
        -sparse \
-       -norevery 20 \
-       -stre 50 \
        -train_threads 2

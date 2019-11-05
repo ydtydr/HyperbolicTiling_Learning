@@ -47,7 +47,7 @@ python3 embed.py \
   -burnin 20 \
   -dampening 0.75 \
   -ndproc 4 \
-  -eval_each 2500 \
+  -eval_each 100 \
   -sparse \
   -burnin_multiplier 0.01 \
   -neg_multiplier 0.1 \
@@ -56,7 +56,5 @@ python3 embed.py \
   -dampening 1.0 \
   -batchsize 10 \
   -manifold "$MODEL" \
-  -norevery 20 \
-  -stre 50 \
   -dim "$DIMS" \
   "${EXTRA_ARGS[@]}"

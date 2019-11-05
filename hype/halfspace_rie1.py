@@ -234,20 +234,12 @@ class HalfspaceRie1Distance(Function):
         k1 = u[...,d:-1]#m*n*d
         k2 = v[...,d:-1]#m*n*d
         twosR = k1 - (2**(j2-j1)).unsqueeze(-1).expand_as(k2)*k2#m*n*d
-
-        # up1 = twosR + u[...,:d] - 2**(j2-j1).unsqueeze(-1).expand_as(twosR) * v[...,:d] #m*n*d
-        # s = th.floor(th.log2(1+th.sqrt(th.sum(th.pow(up1, 2), dim=-1))))  # m*n
-        # s = th.zeros_like(s)
-        # upp = up1 * 2**(-1*s.unsqueeze(-1).expand_as(twosR))#m*n*d
-
         s = th.ceil(th.log2(1 + th.sqrt(th.sum(th.pow(twosR, 2), dim=-1))))  # m*n
         R = 2**(-1*s.unsqueeze(-1).expand_as(twosR)) * twosR#m*n*d
         upp = R + 2**(-1*s.unsqueeze(-1).expand_as(R)) * u[...,:d] - 2**(j2-j1-s).unsqueeze(-1).expand_as(R) * v[...,:d]#m*n*d
         lowe = th.clamp(2 * u[...,d-1] * v[...,d-1],min=myeps1)#m*n
         X = th.div(th.sum(th.pow(upp, 2), dim=-1),lowe)#m*n
         nomdis = th.sqrt(th.clamp(X * X + 2 * X * 2**(-2*s-j1+j2),min=0))#m*n sqrt
-#         log1t = (2*s+j1-j2)*th.log(th.Tensor([2]))  # m*n
-#         log2t = th.clamp(2**(-2*s-j1+j2)+X+nomdis,min=myeps2)#m*n
         out_p = (2*s+j1-j2)*th.log(th.Tensor([2])) + th.log(th.clamp(2**(-2*s-j1+j2)+X+nomdis,min=myeps2))#m*n
         self.ins = out_p.clone()
         return out_p

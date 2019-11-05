@@ -99,16 +99,18 @@ def main():
     parser.add_argument('-neg_multiplier', default=1.0, type=float)
     parser.add_argument('-quiet', action='store_true', default=True)
     parser.add_argument('-lr_type', choices=['scale', 'constant'], default='constant')
-    parser.add_argument('-norevery', type=int, default=20, help='Normalize every loop')
-    parser.add_argument('-stre', type=int, default=50, help='when to normalize')
     parser.add_argument('-train_threads', type=int, default=1,
                         help='Number of threads to use in training')
     opt = parser.parse_args()
     
     if 'group' in opt.manifold:
         opt.nor = 'group'
+        opt.norevery = 20
+        opt.stre = 50
     elif 'halfspace' in opt.manifold:
         opt.nor = 'halfspace'
+        opt.norevery = 1
+        opt.stre = 0
     else:
         opt.nor = 'none'
 

@@ -13,7 +13,6 @@ from .manifold import Manifold
 def to_lorentz(u, u_int_matrix):
     L = th.sqrt(th.Tensor([[3, 0, 0], [0, 1, 0], [0, 0, 1]]))
     R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
-#     uu = th.matmul(L.expand_as(u_int_matrix), th.matmul(u_int_matrix.float(), th.matmul(R.expand_as(u_int_matrix), u[..., :3].unsqueeze(-1)))).squeeze(-1)
     uu = th.matmul(L.expand_as(u_int_matrix), th.matmul(u_int_matrix, th.matmul(R.expand_as(u_int_matrix), u[..., :3].unsqueeze(-1)))).squeeze(-1)
     return uu
 
@@ -176,7 +175,7 @@ myn = 25##for float64
 
 class GroupRieDistance(Function):
     @staticmethod
-    def forward(self, u, u_int_matrix, v, v_int_matrix, optt =1):
+    def forward(self, u, u_int_matrix, v, v_int_matrix, optt = 1):
         assert th.isnan(u_int_matrix).max()==0, "u includes NaNs"
         assert th.isnan(v_int_matrix).max()==0, "v includes NaNs"
         assert th.abs(u_int_matrix).max() < 2**25, "u_int_matrix may include Inf integers"
