@@ -13,21 +13,17 @@ from hype.sn import Embedding, initialize
 from hype.adjacency_matrix_dataset import AdjacencyDataset
 from hype import train
 from hype.graph import load_adjacency_matrix, load_edge_list, eval_reconstruction
-from hype.checkpoint import LocalCheckpoint
 from hype.rsgd import RiemannianSGD
 from hype.lorentz import LorentzManifold
 from hype.lorentz_product import LorentzProductManifold
 from hype.group_rie import GroupRieManifold
 from hype.group_rie_high import GroupRiehighManifold
 from hype.group_euc import GroupEucManifold
-from hype.halfspace_euc import HalfspaceEucManifold
 from hype.halfspace_rie import HalfspaceRieManifold
-from hype.halfspace_rie1 import HalfspaceRie1Manifold
 from hype.euclidean import EuclideanManifold
 from hype.poincare import PoincareManifold
 import sys
 import json
-import shutil
 import torch.multiprocessing as mp
 
 
@@ -42,9 +38,7 @@ MANIFOLDS = {
     'group_rie': GroupRieManifold,
     'group_rie_high': GroupRiehighManifold,
     'group_euc': GroupEucManifold,
-    'halfspace_euc': HalfspaceEucManifold,
     'halfspace_rie': HalfspaceRieManifold,
-    'halfspace_rie1': HalfspaceRie1Manifold,
     'euclidean': EuclideanManifold,
     'poincare': PoincareManifold
 }
@@ -101,6 +95,7 @@ def main():
     parser.add_argument('-lr_type', choices=['scale', 'constant'], default='constant')
     parser.add_argument('-train_threads', type=int, default=1,
                         help='Number of threads to use in training')
+    parser.add_argument('-eval_embedding', default=False, help='path for the embedding to be evaluated')
     opt = parser.parse_args()
     
     if 'group' in opt.manifold:
@@ -116,15 +111,14 @@ def main():
 
     # setup debugging and logigng
     log_level = logging.DEBUG if opt.debug else logging.INFO
-    log = logging.getLogger('lorentz')
+    log = logging.getLogger('tiling model')
     logging.basicConfig(level=log_level, format='%(message)s', stream=sys.stdout)
 
     # set default tensor type
     th.set_default_tensor_type('torch.DoubleTensor')####FloatTensor DoubleTensor
     # set device
-    device = th.device(f'cuda:{opt.gpu}' if opt.gpu >= 0 else 'cpu')
-        
-        
+    # device = th.device(f'cuda:{opt.gpu}' if opt.gpu >= 0 else 'cpu')
+    device = th.device('cpu')
 
     # select manifold to optimize on
     manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
@@ -148,18 +142,14 @@ def main():
     # set burnin parameters
     data.neg_multiplier = opt.neg_multiplier
     train._lr_multiplier = opt.burnin_multiplier
-
     # Build config string for log
     log.info(f'json_conf: {json.dumps(vars(opt))}')
-
     if opt.lr_type == 'scale':
         opt.lr = opt.lr * opt.batchsize
 
     # setup optimizer
     optimizer = RiemannianSGD(model.optim_params(manifold), lr=opt.lr)
-
     opt.epoch_start = 0
-
     adj = {}
     for inputs, _ in data:
         for row in inputs:
@@ -169,26 +159,27 @@ def main():
                 adj[x].add(y)
             else:
                 adj[x] = {y}
-    
-    opt.adj = adj 
-    model = model.to(device)
-    if hasattr(model, 'w_avg'):
-        model.w_avg = model.w_avg.to(device)    
-    
-    if opt.train_threads > 1:
-        threads = []
-        model = model.share_memory()
-        if 'group' in opt.manifold:
-            model.int_matrix.share_memory_()
-        args = (device, model, data, optimizer, opt, log)
-        kwargs = {'progress' : not opt.quiet}
-        for i in range(opt.train_threads):
-            threads.append(mp.Process(target=train.train, args=args, kwargs=kwargs))
-            threads[-1].start()
-        [t.join() for t in threads]
+    if not opt.eval_embedding:
+        opt.adj = adj
+        model = model.to(device)
+        if hasattr(model, 'w_avg'):
+            model.w_avg = model.w_avg.to(device)
+        if opt.train_threads > 1:
+            threads = []
+            model = model.share_memory()
+            if 'group' in opt.manifold:
+                model.int_matrix.share_memory_()
+            args = (device, model, data, optimizer, opt, log)
+            kwargs = {'progress' : not opt.quiet}
+            for i in range(opt.train_threads):
+                threads.append(mp.Process(target=train.train, args=args, kwargs=kwargs))
+                threads[-1].start()
+            [t.join() for t in threads]
+        else:
+            train.train(device, model, data, optimizer, opt, log, progress=not opt.quiet)
     else:
-        train.train(device, model, data, optimizer, opt, log, progress=not opt.quiet)
-    
+        model = th.load(opt.eval_embedding, map_location='cpu')['embeddings']
+
     if 'group' in opt.manifold:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())

@@ -15,7 +15,7 @@ python3 embed.py \
        -negs 50 \
        -burnin 20 \
        -ndproc 4 \
-       -manifold halfspace_rie \
+       -manifold group_rie \
        -dset wordnet/mammal_closure.csv \
        -batchsize 10 \
        -eval_each 100 \

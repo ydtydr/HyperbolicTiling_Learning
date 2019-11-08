@@ -17,9 +17,7 @@ from hype.lorentz_product import LorentzProductManifold
 from hype.group_rie import GroupRieManifold
 from hype.group_rie_high import GroupRiehighManifold
 from hype.group_euc import GroupEucManifold
-from hype.halfspace_euc import HalfspaceEucManifold
 from hype.halfspace_rie import HalfspaceRieManifold
-from hype.halfspace_rie1 import HalfspaceRie1Manifold
 from hype.euclidean import EuclideanManifold
 from hype.poincare import PoincareManifold
 # import matplotlib
@@ -32,9 +30,7 @@ MANIFOLDS = {
     'group_rie': GroupRieManifold,
     'group_rie_high': GroupRiehighManifold,
     'group_euc': GroupEucManifold,
-    'halfspace_euc': HalfspaceEucManifold,
     'halfspace_rie': HalfspaceRieManifold,
-    'halfspace_rie1': HalfspaceRie1Manifold,
     'euclidean': EuclideanManifold,
     'poincare': PoincareManifold
 }
@@ -205,7 +201,3 @@ def train(
 
             
     print(LOSS)
-
-    # print(model.lt.weight.data.clone()[0:10,:])
-    # plt.plot(LOSS)
-    # plt.save("/home/ty367/Hyperbolic/newpoin/MYLoss"+str(opt.lr)+".png")

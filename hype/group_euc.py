@@ -10,12 +10,6 @@ from torch.autograd import Function
 from .common import acosh
 from .manifold import Manifold
 
-def to_lorentz(u, u_int_matrix):
-    L = th.sqrt(th.Tensor([[3, 0, 0], [0, 1, 0], [0, 0, 1]]))
-    R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
-    uu = th.matmul(L.expand_as(u_int_matrix), th.matmul(u_int_matrix, th.matmul(R.expand_as(u_int_matrix), u[..., :3].unsqueeze(-1)))).squeeze(-1)
-    return uu
-
 class GroupEucManifold(Manifold):
     __slots__ = ["eps", "_eps", "norm_clip", "max_norm", "debug"]
 
@@ -38,11 +32,12 @@ class GroupEucManifold(Manifold):
         uv.narrow(-1, 0, 1).mul_(-1)
         return th.sum(uv, dim=-1, keepdim=keepdim)
 
-    def to_poincare_ball(self, uu, uu_int_matrix):
-        u = to_lorentz(uu, uu_int_matrix)
-        x = u.clone()
-        d = x.size(-1) - 1
-        return x.narrow(-1, 1, d) / (x.narrow(-1, 0, 1) + 1)
+    def to_poincare_ball(self, u, u_int_matrix):
+        L = th.sqrt(th.Tensor([[3, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        u = th.matmul(L, th.matmul(u_int_matrix, th.matmul(R, u.unsqueeze(-1)))).squeeze(-1)
+        d = u.size(-1) - 1
+        return u.narrow(-1, 1, d) / (u.narrow(-1, 0, 1) + 1)
 
     def distance(self, uu, uu_int_matrix, vv, vv_int_matrix):
         dis = GroupEucDistance.apply(uu, uu_int_matrix, vv, vv_int_matrix)
@@ -51,12 +46,8 @@ class GroupEucManifold(Manifold):
     def pnorm(self, u, u_int_matrix):
         return th.sqrt(th.sum(th.pow(self.to_poincare_ball(u, u_int_matrix), 2), dim=-1))
 
-    def normalize(self, ww, gra=False):
+    def normalize(self, w):
         """Normalize vector such that it is located on the hyperboloid"""
-        if not gra:
-            w = ww[...,:3]
-        else:
-            w = ww
         d = w.size(-1) - 1
         narrowed = w.narrow(-1, 1, d)
         if self.max_norm:
@@ -64,7 +55,7 @@ class GroupEucManifold(Manifold):
         tmp = 1 + th.sum(th.pow(narrowed, 2), dim=-1, keepdim=True)
         tmp.sqrt_()
         w.narrow(-1, 0, 1).copy_(tmp)
-        return ww
+        return w
 
     def normalize_tan(self, x_all, v_all):
         d = v_all.size(1) - 1
@@ -76,8 +67,8 @@ class GroupEucManifold(Manifold):
         return v_all
 
     def init_weights(self, w, irange=1e-5):
-        w.data[...,1:3].uniform_(-irange, irange)
-        w.data[...,0] = th.sqrt(th.clamp(th.sum(w[...,1:3] * w[...,1:3], dim=-1),min=0) + 1)
+        w.data.uniform_(-irange, irange)
+        w.data[..., 0] = th.sqrt(th.clamp(th.sum(w[..., 1:] * w[..., 1:], dim=-1), min=0) + 1)
 
     def init_weights_int_matrix(self, w):
         ID = th.eye(3,3)
@@ -96,32 +87,24 @@ class GroupEucManifold(Manifold):
         return d_p
 
 
-    def expm(self, pp, d_p, lr=None, out=None, normalize=False):
-        p = pp[...,:3]
+    def expm(self, p, d_p, lr=None, out=None, normalize=False):
         """Exponential map for hyperboloid"""
         if out is None:
             out = p
         if d_p.is_sparse:
-            ix, d_val1 = d_p._indices().squeeze(), d_p._values()
-            d_val = d_val1[..., :3]
-            # This pulls `ix` out of the original embedding table, which could
-            # be in a corrupted state.  normalize it to fix it back to the
-            # surface of the hyperboloid...
-            # TODO: we should only do the normalize if we know that we are
-            # training with multiple threads, otherwise this is a bit wasteful
-            p_val = self.normalize(p.index_select(0, ix),gra=True)
+            ix, d_val = d_p._indices().squeeze(), d_p._values()
+            p_val = self.normalize(p.index_select(0, ix))
             newp = p_val + d_val
-            newp = self.normalize(newp, gra=True)
+            newp = self.normalize(newp)
             p.index_copy_(0, ix, newp)
         else:
-            d_p1 = d_p[...,:3].clone()
             if lr is not None:
-                d_p1.narrow(-1, 0, 1).mul_(0)
-                d_p1.mul_(-lr)
-            newp = p + d_p1
-            newp = self.normalize(newp, gra=True)
+                d_p.narrow(-1, 0, 1).mul_(0)
+                d_p.mul_(-lr)
+            newp = p + d_p
+            newp = self.normalize(newp)
             if normalize:
-                newp = self.normalize(newp,gra=True)
+                newp = self.normalize(newp)
             p.copy_(newp)
 
     def logm(self, x, y):
@@ -159,61 +142,62 @@ myn = 25##for float64
 
 def nabl(u):
     nablaut = th.zeros(u.size(0),u.size(1),3,3)
-    uu = th.div(u[..., :3], u[..., 0:1].expand_as(u[..., :3]))
+    uu = th.div(u, u[..., 0:1].expand_as(u))
     nablaut[..., 0, :].copy_(uu)
-    one1 = th.Tensor([0, 1, 0]).unsqueeze(0).unsqueeze(0).expand_as(uu)  # n*m*3 form
-    one2 = th.Tensor([0, 0, 1]).unsqueeze(0).unsqueeze(0).expand_as(uu)  # n*m*3 form
-    nablaut[..., 1, :].copy_(one1)
-    nablaut[..., 2, :].copy_(one2)
+    nablaut[..., 1, :].copy_(th.Tensor([0, 1, 0]).unsqueeze(0).unsqueeze(0).expand_as(uu))
+    nablaut[..., 2, :].copy_(th.Tensor([0, 0, 1]).unsqueeze(0).unsqueeze(0).expand_as(uu))
     return nablaut.transpose(-2, -1)
 
 class GroupEucDistance(Function):
     @staticmethod
-    def forward(self, u, u_int_matrix, v, v_int_matrix):
-        assert th.isnan(u_int_matrix).max()==0, "u includes NaNs"
-        assert th.isnan(v_int_matrix).max()==0, "v includes NaNs"
-        assert th.abs(u_int_matrix).max() < 2**25, "u_int_matrix may include Inf integers"
-        assert th.abs(v_int_matrix).max() < 2**25, "v_int_matrix may include Inf integers"
-        assert th.abs(u).max() < 100, "u are out of F"
-        assert th.abs(v).max() < 100, "v are out of F"
-        assert u.max() != float('inf') and u.min() != float('inf')
-        assert v.max() != float('inf') and v.min() != float('inf')
-        if len(u)<len(v):
+    def forward(self, u, u_int_matrix, v, v_int_matrix, AvOverflow=False, myeps1=1e-8, myeps2=1e-16,
+                decompose_factor=25):
+        # decompose_factor = 11 for float32; decompose_factor = 25 for float64.
+        assert th.isnan(u_int_matrix).max() == 0, "u includes NaNs"
+        assert th.isnan(v_int_matrix).max() == 0, "v includes NaNs"
+        if len(u) < len(v):
             u = u.expand_as(v)
             u_int_matrix = u_int_matrix.expand_as(v_int_matrix)
-        elif len(u)>len(v):
+        elif len(u) > len(v):
             v = v.expand_as(u)
             v_int_matrix = v_int_matrix.expand_as(u_int_matrix)
         self.save_for_backward(u, v)
         M3 = th.Tensor([[3, 0, 0], [0, -1, 0], [0, 0, -1]])
         R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        #####################
-        u_int_matrix2 = th.fmod(u_int_matrix, 2**myn)
+        ############# use U = U1+U2 version, we separate U^TM3V into (U1+U2)^TM3(V1+V2)=U1^TM3V1+U1^TM3V2+U2^TM3V1+U2^TM3V2,
+        ############# in order to avoid numerical inprecision of storing
+        ############# integers in float, and multiply them to get the other intergers, which may be incorrect due to inprecision.
+        u_int_matrix2 = th.fmod(u_int_matrix, 2 ** decompose_factor)
         u_int_matrix1 = u_int_matrix - u_int_matrix2
-        v_int_matrix2 = th.fmod(v_int_matrix, 2**myn)
+        v_int_matrix2 = th.fmod(v_int_matrix, 2 ** decompose_factor)
         v_int_matrix1 = v_int_matrix - v_int_matrix2
-        self.hatQ = th.matmul(u_int_matrix1.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix1))+(th.matmul(u_int_matrix1.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix2))+th.matmul(u_int_matrix2.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix1)))+th.matmul(u_int_matrix2.transpose(-2,-1), th.matmul(M3.expand_as(u_int_matrix), v_int_matrix2))#cpu, this may overflow, need to decompose them in some way
-        RThatQR = th.matmul(R.expand_as(self.hatQ),th.matmul(self.hatQ, R.expand_as(self.hatQ)))#cpu float
-        d_c = th.matmul(u[..., :3].unsqueeze(-1).transpose(-2,-1), th.matmul(RThatQR, v[..., :3].unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float
-        self.nomdis = th.sqrt(th.clamp(d_c*d_c-th.ones_like(d_c),min=myeps2))#cpu float
-        outp = th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
+        Q = th.matmul(u_int_matrix1.transpose(-2, -1), th.matmul(M3, v_int_matrix1)) \
+            + (th.matmul(u_int_matrix1.transpose(-2, -1), th.matmul(M3, v_int_matrix2))
+               + th.matmul(u_int_matrix2.transpose(-2, -1), th.matmul(M3, v_int_matrix1))) \
+            + th.matmul(u_int_matrix2.transpose(-2, -1), th.matmul(M3, v_int_matrix2))
+        Q11 = th.clamp(Q.narrow(-2, 0, 1).narrow(-1, 0, 1), min=myeps1)  # divide Q by Q11 to avoid overflow
+        if not AvOverflow:  #### if the dataset is not complex, and there is overflow concern, we set Q11=1, then Q=hatQ, if AvOverflow is false
+            Q11 = th.clamp(Q11, max=1)
+        self.hatQ = th.div(Q, Q11.expand_as(Q))  # divided by Q11
+        RThatQR = th.matmul(R, th.matmul(self.hatQ, R))  # cpu float
+        d_c = th.matmul(u.unsqueeze(-1).transpose(-2, -1), th.matmul(RThatQR, v.unsqueeze(-1))).squeeze(-1).squeeze(
+            -1)  # cpu float
+        invQ11 = th.div(th.ones_like(Q11.squeeze(-1).squeeze(-1)), Q11.squeeze(-1).squeeze(-1))  # cpu float
+        self.nomdis = th.sqrt(th.clamp(d_c * d_c - invQ11 * invQ11, min=myeps2))  # cpu float
+        outp = th.log(Q11.squeeze(-1).squeeze(-1)) + th.log(th.clamp(d_c + self.nomdis, min=myeps1))  # cpu float
         return outp
 
     @staticmethod
     def backward(self, g):
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]])).unsqueeze(0).unsqueeze(0).expand_as(self.hatQ)
+        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]]))
         u, v = self.saved_tensors
-        g = g.unsqueeze(-1).expand_as(u).clone()
+        g = g.unsqueeze(-1).expand_as(u)
         nablaut = nabl(u)
         nablavt = nabl(v)
-        uupfrac = th.matmul(nablaut, th.matmul(R,th.matmul(self.hatQ, th.matmul(R,v[..., :3].unsqueeze(-1))))).squeeze(-1)
-        vupfrac = th.matmul(nablavt, th.matmul(R,th.matmul(self.hatQ.transpose(-2,-1), th.matmul(R,u[..., :3].unsqueeze(-1))))).squeeze(-1)
+        uupfrac = th.matmul(nablaut, th.matmul(R,th.matmul(self.hatQ, th.matmul(R,v.unsqueeze(-1))))).squeeze(-1)
+        vupfrac = th.matmul(nablavt, th.matmul(R,th.matmul(self.hatQ.transpose(-2,-1), th.matmul(R,u.unsqueeze(-1))))).squeeze(-1)
         gu = th.div(uupfrac,self.nomdis.unsqueeze(-1).expand_as(uupfrac))
         gv = th.div(vupfrac,self.nomdis.unsqueeze(-1).expand_as(vupfrac))
-        assert gu.max() != float("Inf"), " gu max includes inf"
-        assert gv.max() != float("Inf"), " gv max includes inf"
-        assert gu.min() != float("Inf"), " gu min includes inf"
-        assert gv.min() != float("Inf"), " gv min includes inf"
         assert th.isnan(gu).max() == 0, "gu includes NaNs"
         assert th.isnan(gv).max() == 0, "gv includes NaNs"
         return g * gu, None, g * gv, None

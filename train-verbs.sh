@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -J vs_gh2
-#SBATCH -o vs_gh2.o%j
-#SBATCH -e vs_gh2.o%j
+#SBATCH -J vs_g2
+#SBATCH -o vs_g2.o%j
+#SBATCH -e vs_g2.o%j
 #SBATCH -N 1
 #SBATCH -n 5
 #SBATCH --mem=5000
@@ -10,7 +10,7 @@
 #SBATCH --nodelist=totient-cpu-08
 
 DIMS="2"
-MODEL="group_rie_high"
+MODEL="group_rie"
 
 while true; do
   case "$1" in
@@ -34,8 +34,6 @@ case "$MODEL" in
   "group_rie_high" ) EXTRA_ARGS=("-lr" "0.5" "-no-maxnorm");;
   "group_euc" ) EXTRA_ARGS=("-lr" "0.5" "-no-maxnorm");;
   "halfspace_rie" ) EXTRA_ARGS=("-lr" "0.5" "-no-maxnorm");;  
-  "halfspace_rie1" ) EXTRA_ARGS=("-lr" "0.5" "-no-maxnorm");;  
-  "halfspace_euc" ) EXTRA_ARGS=("-lr" "0.5" "-no-maxnorm");;
   "poincare" ) EXTRA_ARGS=("-lr" "0.5");;
   * ) echo "$USAGE"; exit 1;;
 esac

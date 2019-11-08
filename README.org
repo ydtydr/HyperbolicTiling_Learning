@@ -38,7 +38,7 @@ the project and run
 #+END_SRC
 This shell script includes the appropriate parameter settings for the mammals subtree and saves the trained model as =mammals.pth=.
 
-Identical scripts to learn embeddings of Word nouns, Verbs and Gr-QC are located at =train-nouns.sh=, =train-verbs.sh=,
+Similar scripts to learn embeddings of Word nouns, Verbs and Gr-QC are located at =train-nouns.sh=, =train-verbs.sh=,
 =train-grqc.sh=. These scripts contain the hyperparameter setting to reproduce the results
 for embeddings of [[https:][(Yu & De Sa, 2010)]]. The embeddings are trained via multithreaded async SGD.
 

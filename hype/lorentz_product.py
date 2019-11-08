@@ -119,12 +119,6 @@ class LorentzProductManifold(Manifold):
             p = pp[...,3*i:3*(i+1)]
             d_val = d_val_p[...,3*i:3*(i+1)]
             p_val = p_val_p[...,3*i:3*(i+1)]
-            """Exponential map for hyperboloid"""
-            # This pulls `ix` out of the original embedding table, which could
-            # be in a corrupted state.  normalize it to fix it back to the
-            # surface of the hyperboloid...
-            # TODO: we should only do the normalize if we know that we are
-            # training with multiple threads, otherwise this is a bit wasteful
             ldv = self.ldot(d_val, d_val, keepdim=True)
             if self.debug:
                 assert all(ldv > 0), "Tangent norm must be greater 0"
