@@ -22,14 +22,20 @@ Clone this repository and run following commands
   python setup.py build_ext --inplace
 #+END_SRC
 
+** Dependencies
+- Python 3 with NumPy
+- PyTorch
+- Scikit-Learn
+- NLTK (to generate the WordNet data)
+
 ** Example: Embedding WordNet Mammals
 First generate the transitive closure of data via
 #+BEGIN_SRC sh
   cd wordnet
   python transitive_closure.py
 #+END_SRC
-This will generate the transitive closure of the full noun hierarchy as well as of the mammals subtree of WordNet.
-We also include WordNet Verbs and Gr-QC dataset in /wordnet/ folder.
+This will generate the transitive closure of the full noun, verb hierarchy as well as of the mammals subtree of WordNet.
+We also include the Gr-QC dataset in /wordnet/ folder.
 
 To embed the mammals subtree in the reconstruction setting, go to the /root directory/ of
 the project and run
@@ -39,19 +45,12 @@ the project and run
 This shell script includes the appropriate parameter settings for the mammals subtree. Similar scripts to learn embeddings
 of Word nouns, Verbs and Gr-QC are located at =train-nouns.sh=, =train-verbs.sh=,
 =train-grqc.sh=. These scripts contain the hyperparameters to reproduce the embeddings results in the paper with available
-models: =poincare=, =lorentz=, =cartesian product of lorentz (lorentz_product)=, =L-tiling-rie (group_rie)=, =L-tiling-euc (group_euc)=, =H-tiling-rie (halfspace_rie)=,
-=cartesian product of L-tiling-rie (group_rie_high)=. Multithreaded async SGD training is also supported.
-
-** Dependencies
-- Python 3 with NumPy
-- PyTorch
-- Scikit-Learn
-- NLTK (to generate the WordNet data)
+models: =Poincare=, =Lorentz=, =NLorentz=, =LTiling_rsgd=, =NLTiling_rsgd=, =LTiling_sgd= and =HTiling_rsgd=. Multithreaded async SGD training is also supported.
 
 ** References
 If you use our code or wish to refer to our results, please use the following BibTex entry:
 #+BEGIN_SRC bibtex
-@incollection{Yu_2019_NeurIPS_tiling,
+@incollection{yu2019numerically,
   title = {Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models},
   author = {Yu, Tao and De Sa, Christopher M},
   booktitle = {Proceedings of the 33rd Conference on Neural Information Processing Systems (NeurIPS 2019)},

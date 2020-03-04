@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018-present, Facebook, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
 
 import torch as th
 import numpy as np
@@ -14,14 +9,14 @@ from hype.adjacency_matrix_dataset import AdjacencyDataset
 from hype import train
 from hype.graph import load_adjacency_matrix, load_edge_list, eval_reconstruction
 from hype.rsgd import RiemannianSGD
-from hype.lorentz import LorentzManifold
-from hype.lorentz_product import LorentzProductManifold
-from hype.group_rie import GroupRieManifold
-from hype.group_rie_high import GroupRiehighManifold
-from hype.group_euc import GroupEucManifold
-from hype.halfspace_rie import HalfspaceRieManifold
-from hype.euclidean import EuclideanManifold
-from hype.poincare import PoincareManifold
+from hype.Euclidean import EuclideanManifold
+from hype.Poincare import PoincareManifold
+from hype.Lorentz import LorentzManifold
+from hype.NLorentz import NLorentzManifold
+from hype.LTiling_rsgd import LTilingRSGDManifold
+from hype.NLTiling_rsgd import NLTilingRSGDManifold
+from hype.LTiling_sgd import LTilingSGDManifold
+from hype.HTiling_rsgd import HTilingRSGDManifold
 import sys
 import json
 import torch.multiprocessing as mp
@@ -33,14 +28,14 @@ np.random.seed(42)
 
 
 MANIFOLDS = {
-    'lorentz': LorentzManifold,
-    'lorentz_product': LorentzProductManifold,
-    'group_rie': GroupRieManifold,
-    'group_rie_high': GroupRiehighManifold,
-    'group_euc': GroupEucManifold,
-    'halfspace_rie': HalfspaceRieManifold,
-    'euclidean': EuclideanManifold,
-    'poincare': PoincareManifold
+    'Euclidean': EuclideanManifold,
+    'Poincare': PoincareManifold,
+    'Lorentz': LorentzManifold,
+    'NLorentz': NLorentzManifold,
+    'LTiling_rsgd': LTilingRSGDManifold,
+    'NLTiling_rsgd': NLTilingRSGDManifold,
+    'LTiling_sgd': LTilingSGDManifold,
+    'HTiling_rsgd': HTilingRSGDManifold
 }
 
 
@@ -98,12 +93,12 @@ def main():
     parser.add_argument('-eval_embedding', default=False, help='path for the embedding to be evaluated')
     opt = parser.parse_args()
     
-    if 'group' in opt.manifold:
-        opt.nor = 'group'
+    if 'LTiling' in opt.manifold:
+        opt.nor = 'LTiling'
         opt.norevery = 20
         opt.stre = 50
-    elif 'halfspace' in opt.manifold:
-        opt.nor = 'halfspace'
+    elif 'HTiling' in opt.manifold:
+        opt.nor = 'HTiling'
         opt.norevery = 1
         opt.stre = 0
     else:
@@ -167,7 +162,7 @@ def main():
         if opt.train_threads > 1:
             threads = []
             model = model.share_memory()
-            if 'group' in opt.manifold:
+            if 'LTiling' in opt.manifold:
                 model.int_matrix.share_memory_()
             args = (device, model, data, optimizer, opt, log)
             kwargs = {'progress' : not opt.quiet}
@@ -180,7 +175,7 @@ def main():
     else:
         model = th.load(opt.eval_embedding, map_location='cpu')['embeddings']
 
-    if 'group' in opt.manifold:
+    if 'LTiling' in opt.manifold:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
     else:
@@ -193,7 +188,7 @@ def main():
         f'"sqnorm_avg": {sqnorms.mean().item()}, '
         f'"sqnorm_max": {sqnorms.max().item()}, '
         f'"mean_rank": {meanrank}, '
-        f'"map_rank": {maprank}, '
+        f'"map": {maprank}, '
         '}'
     )
 

@@ -87,11 +87,12 @@ class Embedding(nn.Module):
         self.manifold = manifold
         self.lt = nn.Embedding(size, dim, sparse=sparse)
         ############ add this line to store integer matrix
-        if 'group' in str(manifold) and 'high' not in str(manifold):
-            self.int_matrix = th.Tensor(size, 3, 3)
-        elif 'group' in str(manifold) and 'high' in str(manifold):
-            self.int_matrix = th.Tensor(size, dim//3, 3, 3)
-        ############        
+        if 'LTiling' in str(manifold):
+            if 'N' in str(manifold):
+                self.int_matrix = th.Tensor(size, dim//3, 3, 3)
+            else:
+                self.int_matrix = th.Tensor(size, 3, 3)
+        ############
         self.dist = manifold.distance
         self.pre_hook = None
         self.post_hook = None
@@ -99,7 +100,7 @@ class Embedding(nn.Module):
 
     def init_weights(self, manifold, scale=1e-4):
         manifold.init_weights(self.lt.weight, scale)
-        if 'group' in str(self.manifold):
+        if 'LTiling' in str(self.manifold):
             self.int_matrix.zero_()
             manifold.init_weights_int_matrix(self.int_matrix)
 
@@ -109,7 +110,7 @@ class Embedding(nn.Module):
             e = self.manifold.normalize(e)
         if self.pre_hook is not None:
             e = self.pre_hook(e)
-        if 'group' in str(self.manifold):
+        if 'LTiling' in str(self.manifold):
             int_matrix = self.int_matrix[inputs]
             fval = self._forward(e, int_matrix)
         else:
@@ -219,7 +220,7 @@ def reconstruction_worker(adj, lt, distfn, objects, progress=False, lt_int_matri
     for object in tqdm(objects) if progress else objects:
         labels.fill(0)
         neighbors = np.array(list(adj[object]))
-        if 'group' in str(distfn):
+        if 'LTiling' in str(distfn):
             dists = distfn(lt[None, object], lt_int_matrix[None, object], lt, lt_int_matrix)
         else:
             dists = distfn(lt[None, object], lt)
@@ -270,14 +271,14 @@ def eval_reconstruction(adj, lt, distfn, workers=1, progress=False, lt_int_matri
     objects = np.array(list(adj.keys()))
     if workers > 1:
         with ThreadPool(workers) as pool:
-            if 'group' in str(distfn):
+            if 'LTiling' in str(distfn):
                 f = partial(reconstruction_worker, adj, lt, distfn, lt_int_matrix=lt_int_matrix)
             else:
                 f = partial(reconstruction_worker, adj, lt, distfn)
             results = pool.map(f, np.array_split(objects, workers))
             results = np.array(results).sum(axis=0).astype(float)
     else:
-        if 'group' in str(distfn):
+        if 'LTiling' in str(distfn):
             results = reconstruction_worker(adj, lt, distfn, objects, progress, lt_int_matrix=lt_int_matrix)
         else:
             results = reconstruction_worker(adj, lt, distfn, objects, progress)

@@ -12,27 +12,27 @@ from tqdm import tqdm
 from torch.utils import data as torch_data
 from hype.graph import eval_reconstruction
 
-from hype.lorentz import LorentzManifold
-from hype.lorentz_product import LorentzProductManifold
-from hype.group_rie import GroupRieManifold
-from hype.group_rie_high import GroupRiehighManifold
-from hype.group_euc import GroupEucManifold
-from hype.halfspace_rie import HalfspaceRieManifold
-from hype.euclidean import EuclideanManifold
-from hype.poincare import PoincareManifold
+from hype.Euclidean import EuclideanManifold
+from hype.Poincare import PoincareManifold
+from hype.Lorentz import LorentzManifold
+from hype.NLorentz import NLorentzManifold
+from hype.LTiling_rsgd import LTilingRSGDManifold
+from hype.NLTiling_rsgd import NLTilingRSGDManifold
+from hype.LTiling_sgd import LTilingSGDManifold
+from hype.HTiling_rsgd import HTilingRSGDManifold
 # import matplotlib
 # matplotlib.use('Agg')
 # import matplotlib.pyplot as plt
 
 MANIFOLDS = {
-    'lorentz': LorentzManifold,
-    'lorentz_product': LorentzProductManifold,
-    'group_rie': GroupRieManifold,
-    'group_rie_high': GroupRiehighManifold,
-    'group_euc': GroupEucManifold,
-    'halfspace_rie': HalfspaceRieManifold,
-    'euclidean': EuclideanManifold,
-    'poincare': PoincareManifold
+    'Euclidean': EuclideanManifold,
+    'Poincare': PoincareManifold,
+    'Lorentz': LorentzManifold,
+    'NLorentz': NLorentzManifold,
+    'LTiling_rsgd': LTilingRSGDManifold,
+    'NLTiling_rsgd': NLTilingRSGDManifold,
+    'LTiling_sgd': LTilingSGDManifold,
+    'HTiling_rsgd': HTilingRSGDManifold
 }
 
 
@@ -173,17 +173,17 @@ def train(
                  f'"loss": {LOSS[epoch]}, '
                  '}')
         if opt.nor!='none' and epoch>opt.stre and (epoch-opt.stre)%opt.norevery==0:
-            if opt.nor=='group':
+            if opt.nor=='LTiling':
                 NMD, NMD_int_matrix = normalize_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.clone())
                 model.int_matrix.data.copy_(NMD_int_matrix)
                 model.lt.weight.data.copy_(NMD)
-            elif opt.nor == 'halfspace':
+            elif opt.nor == 'HTiling':
                 NMD = normalize_halfspace_matrix(model.lt.weight.data.clone())
                 model.lt.weight.data.copy_(NMD)
         
         if (epoch+1)%opt.eval_each==0:
             manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
-            if 'group' in opt.manifold:
+            if 'LTiling' in opt.manifold:
                 meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
                 sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
             else:
@@ -195,7 +195,7 @@ def train(
                 f'"sqnorm_avg": {sqnorms.mean().item()}, '
                 f'"sqnorm_max": {sqnorms.max().item()}, '
                 f'"mean_rank": {meanrank}, '
-                f'"map_rank": {maprank}, '
+                f'"map": {maprank}, '
                 '}'
             )
 

@@ -23,7 +23,7 @@ class Embedding(graph.Embedding):
     def _forward(self, e, int_matrix=None):
         o = e.narrow(1, 1, e.size(1) - 1)
         s = e.narrow(1, 0, 1).expand_as(o)###source
-        if 'group' in str(self.manifold):
+        if 'LTiling' in str(self.manifold):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix).squeeze(-1)
