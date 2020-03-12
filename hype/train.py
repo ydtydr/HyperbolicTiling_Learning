@@ -15,6 +15,7 @@ from hype.graph import eval_reconstruction
 from hype.Euclidean import EuclideanManifold
 from hype.Poincare import PoincareManifold
 from hype.Lorentz import LorentzManifold
+from hype.Halfspace import HalfspaceManifold
 from hype.NLorentz import NLorentzManifold
 from hype.LTiling_rsgd import LTilingRSGDManifold
 from hype.NLTiling_rsgd import NLTilingRSGDManifold
@@ -28,6 +29,7 @@ MANIFOLDS = {
     'Euclidean': EuclideanManifold,
     'Poincare': PoincareManifold,
     'Lorentz': LorentzManifold,
+    'Halfspace': HalfspaceManifold,
     'NLorentz': NLorentzManifold,
     'LTiling_rsgd': LTilingRSGDManifold,
     'NLTiling_rsgd': NLTilingRSGDManifold,
@@ -116,6 +118,7 @@ def normalize_halfspace_matrix(g):
     return y
 
 def train(
+        thread_id,
         device,
         model,
         data,
@@ -168,6 +171,7 @@ def train(
             epoch_loss[i_batch] = loss.cpu().item()
         LOSS[epoch] = th.mean(epoch_loss).item()
         log.info('json_stats: {'
+                 f'"thread_id": {thread_id}, '
                  f'"epoch": {epoch}, '
                  f'"elapsed": {elapsed}, '
                  f'"loss": {LOSS[epoch]}, '
@@ -181,23 +185,23 @@ def train(
                 NMD = normalize_halfspace_matrix(model.lt.weight.data.clone())
                 model.lt.weight.data.copy_(NMD)
         
-        if (epoch+1)%opt.eval_each==0:
-            manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
-            if 'LTiling' in opt.manifold:
-                meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
-                sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
-            else:
-                meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance)
-                sqnorms = manifold.pnorm(model.lt.weight.data.clone())
-            log.info(
-                'json_stats: {'
-                f'"sqnorm_min": {sqnorms.min().item()}, '
-                f'"sqnorm_avg": {sqnorms.mean().item()}, '
-                f'"sqnorm_max": {sqnorms.max().item()}, '
-                f'"mean_rank": {meanrank}, '
-                f'"map": {maprank}, '
-                '}'
-            )
+#         if (epoch+1)%opt.eval_each==0 and thread_id==0:
+#             manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
+#             if 'LTiling' in opt.manifold:
+#                 meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone(), workers = opt.ndproc)
+#                 sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
+#             else:
+#                 meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance)#, workers = opt.ndproc)
+#                 sqnorms = manifold.pnorm(model.lt.weight.data.clone())
+#             log.info(
+#                 'json_stats during training: {'
+#                 f'"sqnorm_min": {sqnorms.min().item()}, '
+#                 f'"sqnorm_avg": {sqnorms.mean().item()}, '
+#                 f'"sqnorm_max": {sqnorms.max().item()}, '
+#                 f'"mean_rank": {meanrank}, '
+#                 f'"map": {maprank}, '
+#                 '}'
+#             )
 
             
-    print(LOSS)
+#     print(LOSS)

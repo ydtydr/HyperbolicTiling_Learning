@@ -80,12 +80,12 @@ def load_edge_list(path, symmetrize=False):
 
 
 class Embedding(nn.Module):
-    def __init__(self, size, dim, manifold, sparse=True):
+    def __init__(self, size, dim, manifold, sparse=True, com_n=1):
         super(Embedding, self).__init__()
         self.dim = dim
         self.nobjects = size
         self.manifold = manifold
-        self.lt = nn.Embedding(size, dim, sparse=sparse)
+        self.lt = nn.Embedding(size, com_n*dim, sparse=sparse)
         ############ add this line to store integer matrix
         if 'LTiling' in str(manifold):
             if 'N' in str(manifold):
@@ -111,8 +111,7 @@ class Embedding(nn.Module):
         if self.pre_hook is not None:
             e = self.pre_hook(e)
         if 'LTiling' in str(self.manifold):
-            int_matrix = self.int_matrix[inputs]
-            fval = self._forward(e, int_matrix)
+            fval = self._forward(e, self.int_matrix[inputs])
         else:
             fval = self._forward(e)
         return fval

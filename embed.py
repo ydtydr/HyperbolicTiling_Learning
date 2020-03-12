@@ -12,6 +12,7 @@ from hype.rsgd import RiemannianSGD
 from hype.Euclidean import EuclideanManifold
 from hype.Poincare import PoincareManifold
 from hype.Lorentz import LorentzManifold
+from hype.Halfspace import HalfspaceManifold
 from hype.NLorentz import NLorentzManifold
 from hype.LTiling_rsgd import LTilingRSGDManifold
 from hype.NLTiling_rsgd import NLTilingRSGDManifold
@@ -31,6 +32,7 @@ MANIFOLDS = {
     'Euclidean': EuclideanManifold,
     'Poincare': PoincareManifold,
     'Lorentz': LorentzManifold,
+    'Halfspace': HalfspaceManifold,
     'NLorentz': NLorentzManifold,
     'LTiling_rsgd': LTilingRSGDManifold,
     'NLTiling_rsgd': NLTilingRSGDManifold,
@@ -56,6 +58,8 @@ def main():
                         help='Dataset identifier')
     parser.add_argument('-dim', type=int, default=20,
                         help='Embedding dimension')
+    parser.add_argument('-com_n', type=int, default=2,
+                        help='Embedding components number')
     parser.add_argument('-manifold', type=str, default='lorentz',
                         choices=MANIFOLDS.keys(), help='Embedding manifold')
     parser.add_argument('-lr', type=float, default=1000,
@@ -116,8 +120,9 @@ def main():
     device = th.device('cpu')
 
     # select manifold to optimize on
-    manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
-    opt.dim = manifold.dim(opt.dim)
+    manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm, com_n=opt.com_n)
+    if 'Halfspace' not in opt.manifold:
+        opt.dim = manifold.dim(opt.dim)
 
     if 'csv' in opt.dset:
         log.info('Using edge list dataloader')
@@ -131,9 +136,9 @@ def main():
         log.info('Setting up dataset...')
         data = AdjacencyDataset(dset, opt.negs, opt.batchsize, opt.ndproc,
             opt.burnin > 0, sample_dampening=opt.dampening)
-        model = Embedding(data.N, opt.dim, manifold, sparse=opt.sparse)
+        model = Embedding(data.N, opt.dim, manifold, sparse=opt.sparse, com_n=opt.com_n)
         objects = dset['objects']
-
+    print('the total dimension', model.lt.weight.data.size(-1), 'com_n', opt.com_n)
     # set burnin parameters
     data.neg_multiplier = opt.neg_multiplier
     train._lr_multiplier = opt.burnin_multiplier
@@ -164,9 +169,9 @@ def main():
             model = model.share_memory()
             if 'LTiling' in opt.manifold:
                 model.int_matrix.share_memory_()
-            args = (device, model, data, optimizer, opt, log)
             kwargs = {'progress' : not opt.quiet}
             for i in range(opt.train_threads):
+                args = (i, device, model, data, optimizer, opt, log)
                 threads.append(mp.Process(target=train.train, args=args, kwargs=kwargs))
                 threads[-1].start()
             [t.join() for t in threads]
@@ -176,14 +181,14 @@ def main():
         model = th.load(opt.eval_embedding, map_location='cpu')['embeddings']
 
     if 'LTiling' in opt.manifold:
-        meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
+        meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone(), workers = opt.ndproc)
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
     else:
-        meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance)
+        meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, workers = opt.ndproc)
         sqnorms = manifold.pnorm(model.lt.weight.data.clone())
     
     log.info(
-        'json_stats: {'
+        'json_stats final test: {'
         f'"sqnorm_min": {sqnorms.min().item()}, '
         f'"sqnorm_avg": {sqnorms.mean().item()}, '
         f'"sqnorm_max": {sqnorms.max().item()}, '
@@ -191,6 +196,7 @@ def main():
         f'"map": {maprank}, '
         '}'
     )
+    print(model.lt.weight.data[0])
 
 
 if __name__ == '__main__':

@@ -11,12 +11,12 @@ from numpy.random import randint
 from . import graph
 from .graph_dataset import BatchedDataset
 
-model_name = '%s_dim%d'
+model_name = '%s_dim%d%com_n'
 
 
 class Embedding(graph.Embedding):
-    def __init__(self, size, dim, manifold, sparse=True):
-        super(Embedding, self).__init__(size, dim, manifold, sparse)
+    def __init__(self, size, dim, manifold, sparse=True, com_n=1):
+        super(Embedding, self).__init__(size, dim, manifold, sparse, com_n)
         self.lossfn = nn.functional.cross_entropy
         self.manifold = manifold
 
@@ -68,7 +68,7 @@ class Dataset(graph.Dataset):
 
 def initialize(manifold, opt, idx, objects, weights, sparse=True):
     conf = []
-    mname = model_name % (opt.manifold, opt.dim)
+    mname = model_name % (opt.manifold, opt.dim, opt.com_n)
     data = BatchedDataset(idx, objects, weights, opt.negs, opt.batchsize,
         opt.ndproc, opt.burnin > 0, opt.dampening)
     model = Embedding(
@@ -76,6 +76,7 @@ def initialize(manifold, opt, idx, objects, weights, sparse=True):
         opt.dim,
         manifold,
         sparse=sparse,
+        com_n=opt.com_n,
     )
     data.objects = objects
     return model, data, mname, conf
