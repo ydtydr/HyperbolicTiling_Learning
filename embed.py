@@ -12,7 +12,7 @@ from hype.rsgd import RiemannianSGD
 from hype.Euclidean import EuclideanManifold
 from hype.Poincare import PoincareManifold
 from hype.Lorentz import LorentzManifold
-from hype.Halfspace import HalfspaceManifold
+# from hype.Halfspace import HalfspaceManifold
 from hype.NLorentz import NLorentzManifold
 from hype.LTiling_rsgd import LTilingRSGDManifold
 from hype.NLTiling_rsgd import NLTilingRSGDManifold
