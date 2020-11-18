@@ -58,7 +58,6 @@ cdef class BatchedDataset:
                 to the number of times a pair co-occurred.  (Equal length to `idx`)
             nnegs (int): Number of negative samples to produce with each positive
             objects (list[str]): Mapping from integer ID to hashtag string
-            nnegs (int): Number of negatives to produce with each positive
             batch_size (int): Size of each minibatch
             num_workers (int): Number of threads to use to produce each batch
             burnin (bool): ???
@@ -101,14 +100,14 @@ cdef class BatchedDataset:
             # Alias method: https://en.wikipedia.org/wiki/Alias_method
             S = (self.counts / np.sum(self.counts)) * self.counts.shape[0]
             A = np.arange(0, self.counts.shape[0], dtype=np.long)
-            Tl = set(list((S < 1).nonzero()[0]))
+            Tl = set(list((S < 1).nonzero()[0])) #gives pointers to these vertces whose count*(number of vertices) < 1
             Th = set(list((S > 1).nonzero()[0]))
 
             while len(Tl) > 0 and len(Th) > 0:
                 j = Tl.pop()
                 k = Th.pop()
-                S[k] = S[k] - 1 + S[j]
-                A[j] = k
+                S[k] = S[k] - 1 + S[j] #it keeps the remaining probability
+                A[j] = k #this points to another vertex 
                 if S[k] < 1:
                     Tl.add(k)
                 elif S[k] > 1:

@@ -11,22 +11,26 @@ from numpy.random import randint
 from . import graph
 from .graph_dataset import BatchedDataset
 
-model_name = '%s_dim%d%com_n'
+model_name = '%s_dim%d'
 
 
 class Embedding(graph.Embedding):
-    def __init__(self, size, dim, manifold, sparse=True, com_n=1):
-        super(Embedding, self).__init__(size, dim, manifold, sparse, com_n)
+    def __init__(self, size, dim, manifold, device, sparse=True):
+        super(Embedding, self).__init__(size, dim, manifold, device, sparse)
         self.lossfn = nn.functional.cross_entropy
         self.manifold = manifold
 
-    def _forward(self, e, int_matrix=None):
+    def _forward(self, e, int_matrix=None, int_norm=None):
         o = e.narrow(1, 1, e.size(1) - 1)
         s = e.narrow(1, 0, 1).expand_as(o)###source
-        if 'LTiling' in str(self.manifold):
+        if 'group' in str(self.manifold):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix).squeeze(-1)
+        elif 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
+            o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
+            s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
+            dists = self.dist(s, s_int_matrix, o, o_int_matrix, self.g).squeeze(-1)
         else:
             dists = self.dist(s, o).squeeze(-1)
         return -dists
@@ -66,17 +70,17 @@ class Dataset(graph.Dataset):
         return th.LongTensor(ix).view(1, len(ix)), th.zeros(1).long()
 
 
-def initialize(manifold, opt, idx, objects, weights, sparse=True):
+def initialize(manifold, opt, idx, objects, weights, device, sparse=True):
     conf = []
-    mname = model_name % (opt.manifold, opt.dim, opt.com_n)
+    mname = model_name % (opt.manifold, opt.dim)
     data = BatchedDataset(idx, objects, weights, opt.negs, opt.batchsize,
         opt.ndproc, opt.burnin > 0, opt.dampening)
     model = Embedding(
         len(data.objects),
         opt.dim,
         manifold,
-        sparse=sparse,
-        com_n=opt.com_n,
+        device,
+        sparse=sparse
     )
     data.objects = objects
     return model, data, mname, conf

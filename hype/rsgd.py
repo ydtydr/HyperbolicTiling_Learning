@@ -57,3 +57,4 @@ class RiemannianSGD(Optimizer):
                 expm(p.data, d_p)
 
         return loss
+ 

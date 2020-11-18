@@ -68,6 +68,15 @@ def load_adjacency_matrix(path, format='hdf5', symmetrize=False):
 
 
 def load_edge_list(path, symmetrize=False):
+    '''
+    Used in embed to read data from a file (e.g. .csv)
+    A dataset is a graph (edges and vertices)
+
+    Args:
+    idx (ndarray[number of edges,2]): storing pointers to objects
+    objects.tolist() (list[number of vertices]): storing names of vertices
+    weights (ndarra[number of edges]): weights on edges
+    '''
     df = pandas.read_csv(path, usecols=['id1', 'id2', 'weight'], engine='c')
     df.dropna(inplace=True)
     if symmetrize:
@@ -80,27 +89,43 @@ def load_edge_list(path, symmetrize=False):
 
 
 class Embedding(nn.Module):
-    def __init__(self, size, dim, manifold, sparse=True, com_n=1):
+    def __init__(self, size, dim, manifold, device, sparse=True):
         super(Embedding, self).__init__()
         self.dim = dim
         self.nobjects = size
         self.manifold = manifold
-        self.lt = nn.Embedding(size, com_n*dim, sparse=sparse)
+        self.device = device
+        self.lt = nn.Embedding(size, dim, sparse=sparse)
         ############ add this line to store integer matrix
-        if 'LTiling' in str(manifold):
-            if 'N' in str(manifold):
-                self.int_matrix = th.Tensor(size, dim//3, 3, 3)
-            else:
-                self.int_matrix = th.Tensor(size, 3, 3)
-        ############
+        if 'group' in str(manifold) and 'high' not in str(manifold):
+            self.int_matrix = th.Tensor(size, 3, 3, devie=self.device)
+        elif 'bugaenko6' in str(manifold):
+            self.int_matrix = th.zeros(size, 2, 7, 7, device=self.device) 
+            self.init_scalarproduct()
+        elif 'vinberg17' in str(manifold):
+            self.int_matrix = th.zeros(size, 18, 18, device=self.device) 
+            self.init_scalarproduct_vinberg17()
+        elif 'group' in str(manifold) and 'high' in str(manifold):
+            self.int_matrix = th.Tensor(size, dim//3, 3, 3)
+        ############        
         self.dist = manifold.distance
         self.pre_hook = None
         self.post_hook = None
         self.init_weights(manifold)
 
+    def init_scalarproduct(self):
+        self.g = th.zeros(2,7,7, device=self.device)
+        self.g[0] = th.eye(7,7, device=self.device)
+        self.g[0,0,0] = -1
+        self.g[1,0,0] = -1
+
+    def init_scalarproduct_vinberg17(self):
+        self.g = th.eye(18,18, device=self.device)
+        self.g[0,0] = -1
+
     def init_weights(self, manifold, scale=1e-4):
         manifold.init_weights(self.lt.weight, scale)
-        if 'LTiling' in str(self.manifold):
+        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
             self.int_matrix.zero_()
             manifold.init_weights_int_matrix(self.int_matrix)
 
@@ -110,8 +135,9 @@ class Embedding(nn.Module):
             e = self.manifold.normalize(e)
         if self.pre_hook is not None:
             e = self.pre_hook(e)
-        if 'LTiling' in str(self.manifold):
-            fval = self._forward(e, self.int_matrix[inputs])
+        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
+            int_matrix = self.int_matrix[inputs]
+            fval = self._forward(e, int_matrix)
         else:
             fval = self._forward(e)
         return fval
@@ -213,14 +239,16 @@ def eval_reconstruction_slow(adj, lt, lt_int_matrix, distfn):
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def reconstruction_worker(adj, lt, distfn, objects, progress=False, lt_int_matrix=None):
+def reconstruction_worker(adj, lt, distfn, objects, progress=False, lt_int_matrix=None, g=None):
     ranksum = nranks = ap_scores = iters = 0
     labels = np.empty(lt.size(0))
     for object in tqdm(objects) if progress else objects:
         labels.fill(0)
         neighbors = np.array(list(adj[object]))
-        if 'LTiling' in str(distfn):
+        if 'group' in str(distfn):
             dists = distfn(lt[None, object], lt_int_matrix[None, object], lt, lt_int_matrix)
+        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
+            dists = distfn(lt[None, object], lt_int_matrix[None, object], lt, lt_int_matrix, g)
         else:
             dists = distfn(lt[None, object], lt)
         dists[object] = 1e12
@@ -257,7 +285,7 @@ def reconstruction_worker(adj, lt, distfn, objects, progress=False, lt_int_matri
     return float(ranksum), nranks, ap_scores, iters
 
 
-def eval_reconstruction(adj, lt, distfn, workers=1, progress=False, lt_int_matrix=None):
+def eval_reconstruction(adj, lt, distfn, g=None, workers=1, progress=False, lt_int_matrix=None):
     '''
     Reconstruction evaluation.  For each object, rank its neighbors by distance
     Args:
@@ -270,15 +298,17 @@ def eval_reconstruction(adj, lt, distfn, workers=1, progress=False, lt_int_matri
     objects = np.array(list(adj.keys()))
     if workers > 1:
         with ThreadPool(workers) as pool:
-            if 'LTiling' in str(distfn):
+            if 'group' in str(distfn) or 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
                 f = partial(reconstruction_worker, adj, lt, distfn, lt_int_matrix=lt_int_matrix)
             else:
                 f = partial(reconstruction_worker, adj, lt, distfn)
             results = pool.map(f, np.array_split(objects, workers))
             results = np.array(results).sum(axis=0).astype(float)
     else:
-        if 'LTiling' in str(distfn):
+        if 'group' in str(distfn):
             results = reconstruction_worker(adj, lt, distfn, objects, progress, lt_int_matrix=lt_int_matrix)
+        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
+            results = reconstruction_worker(adj, lt, distfn, objects, progress, lt_int_matrix=lt_int_matrix, g = g)
         else:
             results = reconstruction_worker(adj, lt, distfn, objects, progress)
     return float(results[0]) / results[1], float(results[2]) / results[3]
