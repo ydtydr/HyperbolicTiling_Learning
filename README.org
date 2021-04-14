@@ -1,5 +1,7 @@
 ** Numerically Accurate Hyperbolic Embeddings Using Tiling-Based Models
 
+Forked from ydtydr/HyperbolicTiling_Learning
+
 This fork contains two more tiling-based models of the hyperbolic space: 
 the 17 dimensional model based on the polytope found by Vinberg and the 6 dimensional model based on the polytope found by Bugaenko. 
 
