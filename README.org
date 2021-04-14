@@ -9,4 +9,4 @@ The Vinberg's polytope is not compact but has finite volume and is the highest-d
 
 ** Example: Embedding WordNet Mammals
 
-This shell script =train-mammals-vinberg17.sh= and =train-verbs-bugaenko6.sh= includes the appropriate parameter settings for training on mammals and verbs datasets using the new tiling-based models. 
+This shell scripts =train-mammals-vinberg17.sh= and =train-verbs-bugaenko6.sh= include the appropriate parameter settings for training on mammals and verbs datasets using the new tiling-based models. 
