@@ -2,13 +2,13 @@
 
 Forked from ydtydr/HyperbolicTiling_Learning
 
-This fork contains two more tiling-based models of the hyperbolic space: 
-the 17 dimensional model based on the polytope found by Vinberg and the 6 dimensional model based on the polytope found by Bugaenko. 
+This fork contains three more tiling-based models of the hyperbolic space: 
+the 3 and 17 dimensional model based on the polytope found by Vinberg and the 6 dimensional model based on the polytope found by Bugaenko. 
 
-The Bugenko's polytope is compact and it is the highest-dimensional compact hyperbolic Coxeter polytope known. 
-The Vinberg's polytope is not compact but has finite volume and is the highest-dimensional finite volume hyperbolic Coxeter polytope known. 
+The Bugenko's polytope and the 3 dimensional Vinberg's polytope are compact.
+The 17 dimensional Vinberg's polytope is not compact but has finite volume.
 
 
 ** Example: Embedding WordNet Mammals
 
-This shell scripts =train-mammals-vinberg17.sh= and =train-verbs-bugaenko6.sh= include the appropriate parameter settings for training on mammals and verbs datasets using the new tiling-based models. 
+This shell scripts =train-mammals-vinberg17.sh=, =train-verbs-bugaenko6.sh=, =train-cora.sh= include the appropriate parameter settings for training on mammals, verbs and cora datasets using the new tiling-based models. 
