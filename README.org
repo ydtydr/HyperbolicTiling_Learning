@@ -3,7 +3,7 @@
 Forked from ydtydr/HyperbolicTiling_Learning
 
 This fork contains three more tiling-based models of the hyperbolic space: 
-the 3 and 17 dimensional model based on the polytope found by Vinberg and the 6 dimensional model based on the polytope found by Bugaenko. 
+the 3 and 17 dimensionals model based on the polytopes found by Vinberg and the 6 dimensional model based on the polytope found by Bugaenko. 
 
 The Bugenko's polytope and the 3 dimensional Vinberg's polytope are compact.
 The 17 dimensional Vinberg's polytope is not compact but has finite volume.
