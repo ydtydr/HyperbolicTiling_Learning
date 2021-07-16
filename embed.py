@@ -20,6 +20,7 @@ from hype.group_rie import GroupRieManifold
 from hype.group_rie_high import GroupRiehighManifold
 from hype.bugaenko6 import Bugaenko6Manifold
 from hype.vinberg17 import Vinberg17Manifold
+from hype.vinberg3 import Vinberg3Manifold
 from hype.group_euc import GroupEucManifold
 from hype.halfspace_rie import HalfspaceRieManifold
 from hype.euclidean import EuclideanManifold
@@ -27,8 +28,10 @@ from hype.poincare import PoincareManifold
 import sys
 import json
 import torch.multiprocessing as mp
+import copy
+#import wandb
 
-
+#wandb.init(project='tiling')
 
 th.manual_seed(42)
 np.random.seed(42)
@@ -41,6 +44,7 @@ MANIFOLDS = {
     'group_rie_high': GroupRiehighManifold,
     'bugaenko6': Bugaenko6Manifold,
     'vinberg17': Vinberg17Manifold,
+    'vinberg3' : Vinberg3Manifold,
     'group_euc': GroupEucManifold,
     'halfspace_rie': HalfspaceRieManifold,
     'euclidean': EuclideanManifold,
@@ -92,7 +96,7 @@ def main():
     parser.add_argument('-sym', action='store_true', default=False,
                         help='Symmetrize dataset')
     parser.add_argument('-maxnorm', '-no-maxnorm', default='500000',
-                        action=Unsettable, type=int)
+                        action=Unsettable, type=float)
     parser.add_argument('-sparse', default=False, action='store_true',
                         help='Use sparse gradients for embedding table')
     parser.add_argument('-burnin_multiplier', default=0.01, type=float)
@@ -102,6 +106,7 @@ def main():
     parser.add_argument('-train_threads', type=int, default=1,
                         help='Number of threads to use in training')
     parser.add_argument('-eval_embedding', default=False, help='path for the embedding to be evaluated')
+    parser.add_argument('-compare_with', required=False, help='creates a parallel model with the same initialization')
     opt = parser.parse_args()
     
     if 'group' in opt.manifold:
@@ -114,7 +119,12 @@ def main():
         opt.norevery = 10
     elif 'vinberg17' in opt.manifold:
         opt.nor = 'vinberg17'
-        opt.stre = 50
+        opt.stre = 0
+        opt.norevery = 10
+    elif 'vinberg3' in opt.manifold:
+        opt.nor = 'vinberg3'
+        opt.stre = 0
+        opt.norevery = 10
     elif 'halfspace' in opt.manifold:
         opt.nor = 'halfspace'
         opt.norevery = 1
@@ -137,12 +147,39 @@ def main():
     manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
     opt.dim = manifold.dim(opt.dim)
 
+    if opt.compare_with: 
+        if opt.compare_with == 'bugaenko6':
+            opt_comp = copy.deepcopy(opt)
+            opt_comp.manifold = 'bugaenko6'
+            opt_comp.nor = 'bugaenko6'
+            opt_comp.stre = 0
+            opt_comp.norevery = 10
+            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
+        elif opt.compare_with == 'vinberg17':
+            opt_comp = copy.deepcopy(opt)
+            opt_comp.manifold = 'vinberg17'
+            opt_comp.nor = 'vinberg17'
+            opt_comp.stre = 0
+            opt_comp.norevery = 10
+            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
+        elif opt.compare_with == 'lorentz':
+            opt_comp = copy.deepcopy(opt)
+            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
+
     if 'csv' in opt.dset:
         log.info('Using edge list dataloader')
         idx, objects, weights = load_edge_list(opt.dset, opt.sym)
         model, data, model_name, conf = initialize(
             manifold, opt, idx, objects, weights, device, sparse=opt.sparse 
         )
+
+        if opt.compare_with:
+            model_comp, data_comp, model_name_comp, conf_comp = initialize(
+            manifold_comp, opt_comp, idx, objects, weights, device, sparse=opt_comp.sparse 
+        )
+            #model_comp has the same initialisation as model
+            model_comp.lt.weight.data = model.lt.weight.data.detach().clone()
+
     else:
         log.info('Using adjacency matrix dataloader')
         dset = load_adjacency_matrix(opt.dset, 'hdf5')
@@ -150,6 +187,13 @@ def main():
         data = AdjacencyDataset(dset, opt.negs, opt.batchsize, opt.ndproc,
             opt.burnin > 0, sample_dampening=opt.dampening)
         model = Embedding(data.N, opt.dim, manifold, sparse=opt.sparse)
+        
+        if opt.compare_with:
+            model_comp = Embedding(data.N, opt_comp.dim, manifold_comp, sparse=opt.sparse)    
+
+            #model_comp has the same initialisation as model
+            model_comp.lt.weight.data = model.lt.weight.data.detach().clone()
+
         objects = dset['objects']
 
     # set burnin parameters
@@ -162,6 +206,10 @@ def main():
 
     # setup optimizer
     optimizer = RiemannianSGD(model.optim_params(manifold), lr=opt.lr)
+
+    if opt.compare_with:
+        optimizer_comp = RiemannianSGD(model_comp.optim_params(manifold_comp), lr=opt.lr)
+
     opt.epoch_start = 0
     adj = {}
     for inputs, _ in data:
@@ -177,12 +225,22 @@ def main():
     if not opt.eval_embedding:
         opt.adj = adj
         model = model.to(device)
+
+        if opt.compare_with:
+            opt_comp.adj = adj
+            model_comp = model_comp.to(device)
+
         if hasattr(model, 'w_avg'):
             model.w_avg = model.w_avg.to(device)
-        if opt.train_threads > 1:
+
+        if opt.compare_with:
+            if hasattr(model_comp, 'w_avg'):
+                model_comp.w_avg = model_comp.w_avg.to(device)
+
+        if opt.train_threads > 1: #if compare_with not none, we asume train_threads = 1
             threads = []
             model = model.share_memory()
-            if 'group' in opt.manifold or 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold:
+            if 'group' in opt.manifold or 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg3' in opt.manifold:
                 model.int_matrix.share_memory_()
             args = (device, model, data, optimizer, opt, log)
             kwargs = {'progress' : not opt.quiet}
@@ -191,7 +249,10 @@ def main():
                 threads[-1].start()
             [t.join() for t in threads]
         else:
-            train.train(device, model, data, optimizer, opt, log, progress=not opt.quiet)
+            if opt.compare_with:
+                train.train(device, model, data, optimizer, opt, log, model_comp, optimizer_comp, opt_comp, progress=not opt.quiet)
+            else: 
+                train.train(device, model, data, optimizer, opt, log, progress=not opt.quiet)
     else:
         model = th.load(opt.eval_embedding, map_location='cpu')['embeddings']
     
@@ -199,13 +260,21 @@ def main():
     if 'group' in opt.manifold:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
-    elif 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold: 
+    elif 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg17' in opt.manifold: 
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, g = model.g, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
     else:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance)
         sqnorms = manifold.pnorm(model.lt.weight.data.clone())
     
+    if opt.compare_with:
+        if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold: 
+            meanrank_comp, maprank_comp = eval_reconstruction(adj, model_comp.lt.weight.data.clone(), manifold_comp.distance, g = model_comp.g, lt_int_matrix = model_comp.int_matrix.data.clone())
+            sqnorms_comp = manifold_comp.pnorm(model_comp.lt.weight.data.clone(), model_comp.int_matrix.data.clone())
+        else:
+            meanrank_comp, maprank_comp = eval_reconstruction(adj, model_comp.lt.weight.data.clone(), manifold_comp.distance)
+            sqnorms_comp = manifold.pnorm(model_comp.lt.weight.data.clone())
+
     log.info(
         'json_stats: {'
         f'"sqnorm_min": {sqnorms.min().item()}, '
@@ -215,7 +284,25 @@ def main():
         f'"map_rank": {maprank}, '
         '}'
     )
+
+    if opt.compare_with:
+        log.info(
+            'json_stats: {'
+            f'"sqnorm_min_comp": {sqnorms_comp.min().item()}, '
+            f'"sqnorm_avg_comp": {sqnorms_comp.mean().item()}, '
+            f'"sqnorm_max_comp": {sqnorms_comp.max().item()}, '
+            f'"mean_rank_comp": {meanrank_comp}, '
+            f'"map_rank_comp": {maprank_comp}, '
+            '}'
+    )
     
+    th.save(model, 'entire_model.pth')
+
+    if opt.compare_with:
+        th.save(model_comp, 'entire_model_comp.pth')
+
+        if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold:
+            th.save(model_comp.int_matrix.data, 'model_comp_matrx.pt')
 
 if __name__ == '__main__':
     main()
