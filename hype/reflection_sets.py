@@ -2,13 +2,55 @@ import torch as th
 import numpy as np
 from hype.lorentz import LorentzManifold as L
 
+def create_matrices_norms(number_of_roots,dim,r,ver):
+
+	R = th.zeros(number_of_roots,dim,dim)
+	RT = th.zeros(number_of_roots,dim,dim)
+	r_norm = th.zeros(number_of_roots)
+
+	for i in range(number_of_roots): 
+	    r_norm[i] = L.ldot(r[i],r[i])
+	    ldot = L.ldot(ver,r[i]).unsqueeze(-1)
+	    #R[i] = norm of r[i] squared * transpose of a reflection matrix through a hyperplane ortogonal to r[i]
+	    R[i] = r_norm[i]*ver - 2*ldot*r[i] 
+	    RT[i] = R[i].t()
+
+
+	return RT, r_norm
+
+def vinberg3():
+	'''Vinberg symplex in 3-dim Lobachevsky space.  
+	4 vectors r (roots of a polyhedron),
+	R[i] is a Lobachevsky reflection through a wall perpendicular to r[i] multiplied by the square of the norm of r[i]
+	Thus R[i]/r[i] is the reflection 
+	Returns R[i] and lists of norms of r
+	'''
+	dim = 4
+	number_of_roots = 4
+	#versors in R^18
+	ver = th.zeros(dim,dim)
+	for i in range(dim): ver[i,i] = 1
+
+	#vectors ortogonal to faces
+	r = th.zeros(number_of_roots,dim)
+
+	#defining 22 vectors 
+	#Table 4 on page 31 of Vinberg's ON GROUPS OF UNIT ELEMENTS OF CERTAIN QUADRATIC FORMS
+	#there is a mistake in the paper, the n+2 vector should be 3v_0 + v_1 + ... + v_11
+	for i in range(dim-2): r[i] = -ver[i+1]+ver[i+2]
+
+	r[2] = -ver[3]
+	r[3] = ver[0]+ver[1]+ver[2]+ver[3]
+
+	RT, r_norm = create_matrices_norms(number_of_roots,dim,r,ver)
+	
+	return RT, r_norm, r
+
 def vinberg17():
 	'''Vinberg non-compact polyhedron in 17-dim Lobachevsky (Lorentz) space.  
 	22 vectors r (roots of a polyhedron),
-	R[i] is a Lobachevsky reflection through a wall perpendicular to r[i] multiplied by the norm of r[i]
+	R[i] is a Lobachevsky reflection through a wall perpendicular to r[i] multiplied by the square of the norm of r[i]
 	Thus R[i]/r[i] is the reflection 
-	Only R[18]/r[18] is not integral, but r[18] = 10
-
 	Returns R[i] and lists of norms of r
 	'''
 	
@@ -36,16 +78,7 @@ def vinberg17():
 
 	r[21] = 6*ver[0]+2*ver.narrow(0,1,7).sum(0)+ver.narrow(0,8,10).sum(0)
 
-	#R[i] = norm of r[i] squared * transpose of a reflection matrix through a hyperplane ortogonal to r[i]
-	R = th.zeros(22,18,18)
-	RT = th.zeros(22,18,18)
-	r_norm = th.zeros(22)
-
-	for i in range(22): 
-	    r_norm[i] = L.ldot(r[i],r[i])
-	    ldot = L.ldot(ver,r[i]).unsqueeze(-1)
-	    R[i] = r_norm[i]*ver - 2*ldot*r[i]
-	    RT[i] = R[i].t()
+	RT, r_norm = create_matrices_norms(22,18,r,ver)
 
 	return RT, r_norm, r
 

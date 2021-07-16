@@ -9,13 +9,14 @@ import torch as th
 from torch.autograd import Function
 from .common import acosh
 from .manifold import Manifold
+import numpy as np
 
-class GroupRieManifold(Manifold):
+class Vinberg3Manifold(Manifold):
     __slots__ = ["eps", "_eps", "norm_clip", "max_norm", "debug"]
 
     @staticmethod
     def dim(dim):
-        return 3
+        return 4
 
     def __init__(self, eps=1e-12, _eps=1e-5, norm_clip=1, max_norm=1e6,
             debug=False, **kwargs):
@@ -33,14 +34,12 @@ class GroupRieManifold(Manifold):
         return th.sum(uv, dim=-1, keepdim=keepdim)
 
     def to_poincare_ball(self, u, u_int_matrix):
-        L = th.sqrt(th.Tensor([[3, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        u = th.matmul(L,th.matmul(u_int_matrix, th.matmul(R, u.unsqueeze(-1)))).squeeze(-1)
+        u = th.matmul(u_int_matrix, u.unsqueeze(-1)).squeeze(-1)
         d = u.size(-1) - 1
         return u.narrow(-1, 1, d) / (u.narrow(-1, 0, 1) + 1)
 
-    def distance(self, uu, uu_int_matrix, vv, vv_int_matrix):
-        dis = GroupRieDistance.apply(uu, uu_int_matrix, vv, vv_int_matrix)
+    def distance(self, uu, uu_int_matrix, vv, vv_int_matrix, g):
+        dis = GroupRieDistance.apply(uu, uu_int_matrix, vv, vv_int_matrix, g)
         return dis
 
     def pnorm(self, u, u_int_matrix):
@@ -57,7 +56,7 @@ class GroupRieManifold(Manifold):
         w.narrow(-1, 0, 1).copy_(tmp)
         return w
 
-    def normalize_tan(self, x_all, v_all):
+    def normalize_tan(self, x_all, v_all): #to do, it is used in log?
         d = v_all.size(1) - 1
         x = x_all.narrow(1, 1, d)
         xv = th.sum(x * v_all.narrow(1, 1, d), dim=1, keepdim=True)
@@ -67,15 +66,22 @@ class GroupRieManifold(Manifold):
         return v_all
 
     def init_weights(self, w, irange=1e-5):
-        w.data.uniform_(-irange, irange)
+        shift = 0
+        w.data.uniform_(-irange+shift, irange+shift)
         w.data[...,0] = th.sqrt(th.clamp(th.sum(w[...,1:] * w[...,1:], dim=-1),min=0) + 1)
 
     def init_weights_int_matrix(self, w):
         ID = th.zeros_like(w[0])
         for i in range(w.size(-1)): ID[i,i] = 1
+        '''A matrix to define initialization away from the center'''
+        #ID =  th.tensor([[ 521706., -363309., -303223., -219635.], 
+        #              [ -11839.,    8244.,    6881.,    4985.],
+        #              [ 339483., -236411., -197313., -142920.],
+        #              [-395965.,  275745.,  230140.,  166699.]])
+        print(ID)
         w.data.zero_()
         w.data.add_(ID)
-    
+
     def rgrad(self, p, d_p):
         """Riemannian gradient for hyperboloid"""
         if d_p.is_sparse:
@@ -153,51 +159,84 @@ class GroupRieManifold(Manifold):
 
 class GroupRieDistance(Function):
     @staticmethod
-    def forward(self, u, u_int_matrix, v, v_int_matrix, AvOverflow = False, myeps1 = 1e-8 ,myeps2 = 1e-16, decompose_factor = 25):
+    def forward(self, u, u_int_matrix, v, v_int_matrix, g, AvOverflow = False, myeps1 = 1e-8 ,myeps2 = 1e-16, decompose_factor = 25):
         # decompose_factor = 11 for float32; decompose_factor = 25 for float64.
-
         assert th.isnan(u_int_matrix).max()==0, "u includes NaNs"
         assert th.isnan(v_int_matrix).max()==0, "v includes NaNs"
+        #assert th.isnan(u_int_norm).max()==0, "u includes NaNs"
+        #assert th.isnan(v_int_norm).max()==0, "v includes NaNs"
         if len(u)<len(v):
             u = u.expand_as(v)
             u_int_matrix = u_int_matrix.expand_as(v_int_matrix)
+            #u_int_norm = u_int_norm.expand_as(v_int_norm)
         elif len(u)>len(v):
             v = v.expand_as(u)
             v_int_matrix = v_int_matrix.expand_as(u_int_matrix)
+            #v_int_norm = v_int_norm.expand_as(u_int_norm)
+
         self.save_for_backward(u, v)
-        M3 = th.Tensor([[3, 0, 0], [0, -1, 0], [0, 0, -1]]).to(u.get_device())
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(u.get_device())
         ############# use U = U1+U2 version, we separate U^TM3V into (U1+U2)^TM3(V1+V2)=U1^TM3V1+U1^TM3V2+U2^TM3V1+U2^TM3V2,
         ############# in order to avoid numerical inprecision of storing
         ############# integers in float, and multiply them to get the other intergers, which may be incorrect due to inprecision.
-        u_int_matrix2 = th.fmod(u_int_matrix, 2 ** decompose_factor)
-        u_int_matrix1 = u_int_matrix - u_int_matrix2
-        v_int_matrix2 = th.fmod(v_int_matrix, 2 ** decompose_factor)
-        v_int_matrix1 = v_int_matrix - v_int_matrix2
-        Q = th.matmul(u_int_matrix1.transpose(-2,-1), th.matmul(M3, v_int_matrix1))\
-                    +(th.matmul(u_int_matrix1.transpose(-2,-1), th.matmul(M3, v_int_matrix2))
-                      +th.matmul(u_int_matrix2.transpose(-2,-1), th.matmul(M3, v_int_matrix1)))\
-                    +th.matmul(u_int_matrix2.transpose(-2,-1), th.matmul(M3, v_int_matrix2))
-        Q11 = th.clamp(Q.narrow(-2,0,1).narrow(-1,0,1),min=myeps1)# divide Q by Q11 to avoid overflow
-        if not AvOverflow:#### if the dataset is not complex, and there is overflow concern, we set Q11=1, then Q=hatQ, if AvOverflow is false
-            Q11 = th.clamp(Q11,max=1)
-        self.hatQ = th.div(Q, Q11.expand_as(Q))#divided by Q11
-        RThatQR = th.matmul(R,th.matmul(self.hatQ, R))#cpu float
-        d_c = th.matmul(u.unsqueeze(-1).transpose(-2,-1), th.matmul(RThatQR, v.unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float
-        invQ11 = th.div(th.ones_like(Q11.squeeze(-1).squeeze(-1)),Q11.squeeze(-1).squeeze(-1))#cpu float
-        self.nomdis = th.sqrt(th.clamp(d_c*d_c-invQ11*invQ11,min=myeps2))#cpu float
-        outp = th.log(Q11.squeeze(-1).squeeze(-1)) + th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
+
+        #print(g)
+
+        gv_int_matrix = th.matmul(g,v_int_matrix)
+
+        #print(gv_int_matrix)
+
+        u_int_matrix_trans = u_int_matrix.transpose(-2,-1)
+
+        u_int_matrix2 = th.fmod(u_int_matrix_trans, 2 ** decompose_factor)
+        u_int_matrix1 = u_int_matrix_trans - u_int_matrix2
+        gv_int_matrix2 = th.fmod(gv_int_matrix, 2 ** decompose_factor)
+        gv_int_matrix1 = gv_int_matrix - gv_int_matrix2
+        
+        #Q = th.zeros_like(v_int_matrix) #Q = U^TgV
+        #N = th.zeros_like(u_int_norms)
+
+        #for i in range(v_int_matrix.size(0)): #batch size
+        #    for j in range(v_int_matrix.size(1)): #nnegs + 2
+
+        Q = th.matmul(u_int_matrix1, gv_int_matrix1)\
+            +th.matmul(u_int_matrix1, gv_int_matrix2)\
+            +th.matmul(u_int_matrix2, gv_int_matrix1)\
+            +th.matmul(u_int_matrix2, gv_int_matrix2)
+
+        absQ = Q.abs()
+        max_coef = absQ.max(-1, keepdim=True)[0].max(-2,keepdim=True)[0]
+
+        self.hatQ = -th.div(Q,max_coef)
+
+        assert th.isnan(self.hatQ).max() == 0, print(max_coef.min())
+
+        #print(self.hatQ)
+        #print(u[0,0],v[0,0])
+
+        d_c = th.matmul(u.unsqueeze(-1).transpose(-2,-1), th.matmul(self.hatQ, v.unsqueeze(-1))).squeeze(-1).squeeze(-1)#cpu float       
+        #print(d_c[5][5].item())
+        inv_max_coef = th.div(th.ones_like(max_coef.squeeze(-1).squeeze(-1)),max_coef.squeeze(-1).squeeze(-1))
+        self.nomdis = th.sqrt(th.clamp(d_c**2-inv_max_coef**2,min=myeps2))#cpu float
+        #outp = arccosh(d_c) = log(d_c + sqrt(d_c^2 - 1))
+        #print('nomdis', self.nomdis)
+        outp = th.log(max_coef.squeeze(-1).squeeze(-1)) + th.log(th.clamp(d_c + self.nomdis,min=myeps1))#cpu float
+
+        #print(d_c + self.nomdis)
         return outp
 
     @staticmethod
     def backward(self, g):
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(g.get_device())
         u, v = self.saved_tensors
         g = g.unsqueeze(-1).expand_as(u)
-        uupfrac = th.matmul(R,th.matmul(self.hatQ, th.matmul(R,v.unsqueeze(-1)))).squeeze(-1)
-        vupfrac = th.matmul(R,th.matmul(self.hatQ.transpose(-2,-1), th.matmul(R,u.unsqueeze(-1)))).squeeze(-1)
+
+        uupfrac = th.matmul(self.hatQ, v.unsqueeze(-1)).squeeze(-1)
+        vupfrac = th.matmul(self.hatQ.transpose(-2,-1), u.unsqueeze(-1)).squeeze(-1)
+                
         gu = th.div(uupfrac, self.nomdis.unsqueeze(-1).expand_as(uupfrac))
         gv = th.div(vupfrac, self.nomdis.unsqueeze(-1).expand_as(vupfrac))
+
         assert th.isnan(gu).max() == 0, "gu includes NaNs"
         assert th.isnan(gv).max() == 0, "gv includes NaNs"
-        return g * gu, None, g * gv, None
+
+        #print(gu)
+        return g * gu, None, g * gv, None, None

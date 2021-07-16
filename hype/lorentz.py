@@ -82,7 +82,8 @@ class LorentzManifold(Manifold):
         return v_all
 
     def init_weights(self, w, irange=1e-5):
-        w.data.uniform_(-irange, irange)
+        shift = 0
+        w.data.uniform_(-irange+shift, irange+shift)
         w.data.copy_(self.normalize(w.data))
 
     def rgrad(self, p, d_p):

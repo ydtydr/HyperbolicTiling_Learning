@@ -27,7 +27,7 @@ class Embedding(graph.Embedding):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix).squeeze(-1)
-        elif 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
+        elif 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold) or 'vinberg3' in str(self.manifold):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix, self.g).squeeze(-1)

@@ -98,13 +98,16 @@ class Embedding(nn.Module):
         self.lt = nn.Embedding(size, dim, sparse=sparse)
         ############ add this line to store integer matrix
         if 'group' in str(manifold) and 'high' not in str(manifold):
-            self.int_matrix = th.Tensor(size, 3, 3, devie=self.device)
+            self.int_matrix = th.zeros(size, 3, 3, device=self.device)
         elif 'bugaenko6' in str(manifold):
             self.int_matrix = th.zeros(size, 2, 7, 7, device=self.device) 
             self.init_scalarproduct()
         elif 'vinberg17' in str(manifold):
             self.int_matrix = th.zeros(size, 18, 18, device=self.device) 
             self.init_scalarproduct_vinberg17()
+        elif 'vinberg3' in str(manifold):
+            self.int_matrix = th.zeros(size, 4, 4, device=self.device) 
+            self.init_scalarproduct_vinberg3()
         elif 'group' in str(manifold) and 'high' in str(manifold):
             self.int_matrix = th.Tensor(size, dim//3, 3, 3)
         ############        
@@ -123,9 +126,13 @@ class Embedding(nn.Module):
         self.g = th.eye(18,18, device=self.device)
         self.g[0,0] = -1
 
+    def init_scalarproduct_vinberg3(self):
+        self.g = th.eye(4,4, device=self.device)
+        self.g[0,0] = -1
+
     def init_weights(self, manifold, scale=1e-4):
         manifold.init_weights(self.lt.weight, scale)
-        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
+        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold) or 'vinberg3' in str(self.manifold):
             self.int_matrix.zero_()
             manifold.init_weights_int_matrix(self.int_matrix)
 
@@ -135,7 +142,7 @@ class Embedding(nn.Module):
             e = self.manifold.normalize(e)
         if self.pre_hook is not None:
             e = self.pre_hook(e)
-        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold):
+        if 'group' in str(self.manifold) or 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold) or 'vinberg3' in str(self.manifold):
             int_matrix = self.int_matrix[inputs]
             fval = self._forward(e, int_matrix)
         else:
@@ -247,7 +254,7 @@ def reconstruction_worker(adj, lt, distfn, objects, progress=False, lt_int_matri
         neighbors = np.array(list(adj[object]))
         if 'group' in str(distfn):
             dists = distfn(lt[None, object], lt_int_matrix[None, object], lt, lt_int_matrix)
-        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
+        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn) or 'vinberg3' in str(distfn):
             dists = distfn(lt[None, object], lt_int_matrix[None, object], lt, lt_int_matrix, g)
         else:
             dists = distfn(lt[None, object], lt)
@@ -298,7 +305,7 @@ def eval_reconstruction(adj, lt, distfn, g=None, workers=1, progress=False, lt_i
     objects = np.array(list(adj.keys()))
     if workers > 1:
         with ThreadPool(workers) as pool:
-            if 'group' in str(distfn) or 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
+            if 'group' in str(distfn) or 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn) or 'vinberg3' in str(distfn):
                 f = partial(reconstruction_worker, adj, lt, distfn, lt_int_matrix=lt_int_matrix)
             else:
                 f = partial(reconstruction_worker, adj, lt, distfn)
@@ -307,7 +314,7 @@ def eval_reconstruction(adj, lt, distfn, g=None, workers=1, progress=False, lt_i
     else:
         if 'group' in str(distfn):
             results = reconstruction_worker(adj, lt, distfn, objects, progress, lt_int_matrix=lt_int_matrix)
-        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn):
+        elif 'bugaenko6' in str(distfn) or 'vinberg17' in str(distfn) or 'vinberg3' in str(distfn):
             results = reconstruction_worker(adj, lt, distfn, objects, progress, lt_int_matrix=lt_int_matrix, g = g)
         else:
             results = reconstruction_worker(adj, lt, distfn, objects, progress)

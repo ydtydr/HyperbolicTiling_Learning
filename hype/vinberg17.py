@@ -198,7 +198,9 @@ class GroupRieDistance(Function):
         
         #print('Q', Q.size())
 
-        max_coef = Q.max(-1, keepdim=True)[0].max(-2,keepdim=True)[0]
+        absQ = Q.abs()
+
+        max_coef = absQ.max(-1, keepdim=True)[0].max(-2,keepdim=True)[0]
 
         self.hatQ = -th.div(Q,max_coef)
 
