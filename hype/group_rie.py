@@ -70,7 +70,8 @@ class GroupRieManifold(Manifold):
         w.data.uniform_(-irange, irange)
         w.data[...,0] = th.sqrt(th.clamp(th.sum(w[...,1:] * w[...,1:], dim=-1),min=0) + 1)
 
-    def init_weights_int_matrix(self, w):
+    def init_weights_int_matrix(self, w, faraway):
+        #faraway to do 
         ID = th.zeros_like(w[0])
         for i in range(w.size(-1)): ID[i,i] = 1
         w.data.zero_()
@@ -165,8 +166,13 @@ class GroupRieDistance(Function):
             v = v.expand_as(u)
             v_int_matrix = v_int_matrix.expand_as(u_int_matrix)
         self.save_for_backward(u, v)
-        M3 = th.Tensor([[3, 0, 0], [0, -1, 0], [0, 0, -1]]).to(u.get_device())
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(u.get_device())
+        try: 
+            M3 = th.Tensor([[3, 0, 0], [0, -1, 0], [0, 0, -1]]).to(u.get_device())
+            R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(u.get_device())
+        except: 
+            M3 = th.Tensor([[3, 0, 0], [0, -1, 0], [0, 0, -1]])
+            R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
+
         ############# use U = U1+U2 version, we separate U^TM3V into (U1+U2)^TM3(V1+V2)=U1^TM3V1+U1^TM3V2+U2^TM3V1+U2^TM3V2,
         ############# in order to avoid numerical inprecision of storing
         ############# integers in float, and multiply them to get the other intergers, which may be incorrect due to inprecision.
@@ -191,7 +197,11 @@ class GroupRieDistance(Function):
 
     @staticmethod
     def backward(self, g):
-        R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(g.get_device())
+        try:
+            R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]])).to(g.get_device())
+        except: 
+            R = th.sqrt(th.Tensor([[1.0 / 3.0, 0, 0], [0, 1, 0], [0, 0, 1]]))
+
         u, v = self.saved_tensors
         g = g.unsqueeze(-1).expand_as(u)
         uupfrac = th.matmul(R,th.matmul(self.hatQ, th.matmul(R,v.unsqueeze(-1)))).squeeze(-1)

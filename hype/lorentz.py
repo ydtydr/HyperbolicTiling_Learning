@@ -86,6 +86,16 @@ class LorentzManifold(Manifold):
         w.data.uniform_(-irange+shift, irange+shift)
         w.data.copy_(self.normalize(w.data))
 
+    def init_weights_int_matrix(self, w):
+        ID = th.zeros_like(w[0])
+        for i in range(w.size(-1)): ID[i,i] = 1
+        #ID =  th.tensor([[ 521706., -363309., -303223., -219635.], 
+        #              [ -11839.,    8244.,    6881.,    4985.],
+        #              [ 339483., -236411., -197313., -142920.],
+        #              [-395965.,  275745.,  230140.,  166699.]])
+        w.data.zero_()
+        w.data.add_(ID)
+
     def rgrad(self, p, d_p):
         """Riemannian gradient for hyperboloid"""
         if d_p.is_sparse:

@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch as th
+import numpy as np
 from torch import nn
 from numpy.random import randint
 from . import graph
@@ -15,10 +16,11 @@ model_name = '%s_dim%d'
 
 
 class Embedding(graph.Embedding):
-    def __init__(self, size, dim, manifold, device, sparse=True):
-        super(Embedding, self).__init__(size, dim, manifold, device, sparse)
+    def __init__(self, size, dim, manifold, device, faraway, polytope, optimalisation='rsgd', sparse=True):
+        super(Embedding, self).__init__(size, dim, manifold, device, faraway, polytope, optimalisation, sparse)
         self.lossfn = nn.functional.cross_entropy
         self.manifold = manifold
+        self.optimalisation = optimalisation
 
     def _forward(self, e, int_matrix=None, int_norm=None):
         o = e.narrow(1, 1, e.size(1) - 1)
@@ -27,7 +29,7 @@ class Embedding(graph.Embedding):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix).squeeze(-1)
-        elif 'bugaenko6' in str(self.manifold) or 'vinberg17' in str(self.manifold) or 'vinberg3' in str(self.manifold):
+        elif 'hyperbolicspace' in str(self.manifold) or 'bugaenko6' in str(self.manifold):
             o_int_matrix = int_matrix.narrow(1, 1, e.size(1) - 1)
             s_int_matrix = int_matrix.narrow(1, 0, 1).expand_as(o_int_matrix)###source
             dists = self.dist(s, s_int_matrix, o, o_int_matrix, self.g).squeeze(-1)
@@ -36,7 +38,22 @@ class Embedding(graph.Embedding):
         return -dists
     
     def loss(self, preds, targets, weight=None, size_average=True):
-        return self.lossfn(preds, targets)
+        
+        case = 1
+        
+        if case == 1:
+            return self.lossfn(preds, targets)
+        if case == 2:
+            t = 10 #temperature
+            return self.lossfn(-1*t*preds*preds, targets)
+        if case == 3:
+            r = 2*np.log(self.nobjects)-1
+            t = 0.1
+            t0 = (-preds-r)/t + 1
+            t1 = th.exp(1/t0)
+            t2 = th.sum(t1,-1,keepdim=False)
+            t3 = th.div(t1.narrow(-1,0,1).squeeze(),t2)
+            return -th.sum(th.log(t3))/preds.size(0)
 
 
 # This class is now deprecated in favor of BatchedDataset (graph_dataset.pyx)
@@ -80,6 +97,9 @@ def initialize(manifold, opt, idx, objects, weights, device, sparse=True):
         opt.dim,
         manifold,
         device,
+        opt.faraway,
+        opt.polytope,
+        opt.optimalisation,
         sparse=sparse
     )
     data.objects = objects

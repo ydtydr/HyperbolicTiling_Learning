@@ -8,6 +8,7 @@
 import torch as th
 import numpy as np
 import timeit
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.utils import data as torch_data
 from hype.graph import eval_reconstruction
@@ -17,12 +18,14 @@ from hype.lorentz_product import LorentzProductManifold
 from hype.group_rie import GroupRieManifold
 from hype.group_rie_high import GroupRiehighManifold
 from hype.bugaenko6 import Bugaenko6Manifold
-from hype.vinberg17 import Vinberg17Manifold
-from hype.vinberg3 import Vinberg3Manifold
+#from hype.vinberg17 import Vinberg17Manifold #depreciated
+#from hype.vinberg3 import Vinberg3Manifold #depreciated
+from hype.hyperbolicspace import HyperbolicSpace, normalize_hyperbolicspace
 from hype.group_euc import GroupEucManifold
 from hype.halfspace_rie import HalfspaceRieManifold
 from hype.euclidean import EuclideanManifold
 from hype.poincare import PoincareManifold
+from hype.discrete import best_nbr
 
 import hype.reflection_sets as reflection_sets
 
@@ -38,8 +41,9 @@ MANIFOLDS = {
     'group_rie': GroupRieManifold,
     'group_rie_high': GroupRiehighManifold,
     'bugaenko6': Bugaenko6Manifold,
-    'vinberg17': Vinberg17Manifold,
-    'vinberg3' : Vinberg3Manifold,
+    'vinberg17': HyperbolicSpace,
+    'vinberg3' : HyperbolicSpace,
+    'hyperbolic_cube' : HyperbolicSpace,
     'group_euc': GroupEucManifold,
     'halfspace_rie': HalfspaceRieManifold,
     'euclidean': EuclideanManifold,
@@ -192,103 +196,6 @@ def matmul_constructible(L,R):
 	
 	return LR
 
-def normalize_vinberg(g,g_matrix, R, norms, r, x0, debug=0):
-    '''For vinberg17, Only R[18] is not integral, but the fractional part is 0.2 '''
-
-    g = move_to_hyperboloid(g)
-    RVIg =  g.clone()
-
-    number_of_roots = R.size(0)
-    R = th.div(R,norms.unsqueeze(-1).unsqueeze(-1))
-
-    RV = th.zeros_like(R[0,:,:])
-    RVI = th.zeros_like(R[0,:,:])
-    dim = R.size(-1)
-
-    for i in range(dim): 
-        RV[i,i] = 1
-        RVI[i,i] = 1
-	
-    #j = 0
-    #print(np.arccosh(-LorentzManifold.ldot(x0.double(),RVIg,a)), g)
-    
-    while True:
-        
-        #distance of g to the hyperplane orthogonal to the root r = arccosh(sqrt(1+<g,r>^2/<r,r>^2))
-        #we want to apply a reflection R on g iff the distance to the hyperplane is the biggest,
-        #at least arccosh(2) and g is on the other side of the hyperplane then the polytope. 
-        max_index = -1
-        max_lprod = -1
-
-        for i in range(number_of_roots):
-            lprod = LorentzManifold.ldot(RVIg,r[i])
-            if lprod >= norms[i] and lprod > max_lprod: 
-                max_lprod = lprod
-                max_index = i
-        
-        if max_index == -1: break
-        else:
-            RV = th.matmul(RV,R[max_index])
-            RVI = th.matmul(R[max_index],RVI)
-            RVIg = th.matmul(RVI,g)
-            RVIg = move_to_hyperboloid(RVIg)
-            #Norm = matmul_constructible(Norm,norms[:,i,:])
-
-        # i = 0
-        # j = j+1
-
-        # shorter = False
-        # lprod = LorentzManifold.ldot(RVIg,r[i])
-
-        # while norms[i] >= lprod:  
-        #     i = i+1
-        #     if i == N: break
-        #     lprod = LorentzManifold.ldot(RVIg,r[i])
-        # else:
-        #     RV = th.matmul(RV,R[i])
-        #     RVI = th.matmul(R[i],RVI)
-        #     #Norm = matmul_constructible(Norm,norms[:,i,:])
-        #     shorter = True
-
-		#RVIg = move_to_hyperboloid(RVIg,a)
-		#print('RV', RV)
-		#print('NSorm', Norm)
-		#if i<34: print(R[:,i], j)
-		#check distance of RVIg to x_0
-        if debug==1: print(np.arccosh(-LorentzManifold.ldot(x0,RVIg)).item(), RVIg.max().item(), max_index)
-		#, RVI[0].max().item(), RVI[1].max().item(), i, j)
-		#print(RVIg, j)
-
-    if debug==1:	
-        print('RV', RV)
-
-        for i in range(number_of_roots):
-            print('<r,g>', LorentzManifold.ldot(r[i],RVIg).item() < norms[i])
-
-    return RVIg, th.matmul(g_matrix, RV)
-
-def normalize_vinberg17(g,g_matrix,debug=0):
-
-    #a point used to debug to check if distance d(x0,RVIg) decreses
-    x0 = th.zeros(18)
-    for i in range(18): x0[i] = 0
-    x0 = move_to_hyperboloid(x0)
-
-    R, norms, r = reflection_sets.vinberg17()
-
-    return normalize_vinberg(g,g_matrix, R, norms, r, x0, debug)
-
-def normalize_vinberg3(g,g_matrix,debug=0):
-
-    #a point used to debug to check if distance d(x0,RVIg) decreses
-    x0 = th.zeros(4).double()
-    for i in range(4): x0[i] = 0
-    x0 = move_to_hyperboloid(x0)
-
-    R, norms, r = reflection_sets.vinberg3()
-
-    return normalize_vinberg(g,g_matrix, R, norms, r, x0, debug)
-    
 def normalize_gmatrix(gu, gu_int_matrix):
     uu = th.zeros_like(gu)
     uu_int_matrix = th.zeros_like(gu_int_matrix)
@@ -309,6 +216,7 @@ def normalize_bugaenko6_gmatrix(gu, gu_int_matrix):
 		uu[i], uu_int_matrix[i] = normalize_bugaenko6(gu[i], gu_int_matrix[i])
 	return uu, uu_int_matrix
 
+'''
 def normalize_vinberg17_gmatrix(gu, gu_int_matrix):
 	uu = th.zeros_like(gu)
 	uu_int_matrix = th.zeros_like(gu_int_matrix)
@@ -325,7 +233,19 @@ def normalize_vinberg3_gmatrix(gu, gu_int_matrix):
         uu[i], uu_int_matrix[i] = normalize_vinberg3(gu[i], gu_int_matrix[i])
         #if i % 10 == 0: print(i)
     return uu, uu_int_matrix
+'''
 
+def normalize_hyperbolicspace_gmatrix(gu, gu_int_matrix,polytope,dim):
+    uu = th.zeros_like(gu)
+    uu_int_matrix = th.zeros_like(gu_int_matrix)
+    #uu_int_norm = th.zeros_like(gu_int_norm)
+    for i in range(gu.size(0)):
+        uu[i], uu_int_matrix[i] = normalize_hyperbolicspace(gu[i], gu_int_matrix[i],polytope,dim)
+        #if i % 10 == 0: print(i)
+    #print(gu_int_matrix[0])
+    return uu, uu_int_matrix
+
+'''
 def normalize_halfspace(g):
     y = th.zeros(g.size())
     n = (g.size(0)-1)//2
@@ -335,6 +255,7 @@ def normalize_halfspace(g):
     y[:n] = 2**(-1*a) * (g[:n]+g[n:-1]) - y[n:-1]
     assert y[-2]==0
     return y
+'''
 
 def normalize_halfspace_matrix(g):
     y = th.zeros(g.size())
@@ -345,6 +266,23 @@ def normalize_halfspace_matrix(g):
     y[...,:d] = 2**(-1*a).unsqueeze(-1).expand_as(g[...,:d]) * g[...,d:-1] - y[...,d:-1] + 2**(-1*a).unsqueeze(-1).expand_as(g[...,:d]) * g[...,:d]#n*d
     assert y[...,-2].max()==0
     return y
+
+def normalize(epoch, model, opt):
+    if opt.nor=='group':
+        NMD, NMD_int_matrix = normalize_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
+        model.int_matrix.data.copy_(NMD_int_matrix)
+        model.lt.weight.data.copy_(NMD)
+    elif opt.nor == 'HyperbolicSpace':
+        NMD, NMD_int_matrix = normalize_hyperbolicspace_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone(),opt.polytope,opt.dim)
+        model.int_matrix.data.copy_(NMD_int_matrix)
+        model.lt.weight.data.copy_(NMD)
+    elif opt.nor == 'bugaenko6':
+        NMD, NMD_int_matrix = normalize_bugaenko6_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
+        model.int_matrix.data.copy_(NMD_int_matrix)
+        model.lt.weight.data.copy_(NMD)
+    elif opt.nor == 'halfspace':
+        NMD = normalize_halfspace_matrix(model.lt.weight.data.clone())
+        model.lt.weight.data.copy_(NMD)
 
 def train(
         device,
@@ -376,23 +314,49 @@ def train(
         LOSS_comp = np.zeros(opt.epochs)
 
     for epoch in range(opt.epoch_start, opt.epochs):
+
         max_grad = 0
-        print(th.abs(model.lt.weight.data).max().item())
-        if model_comp:
-            print(th.abs(model_comp.lt.weight.data).max().item())
-            if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold or 'vinberg3' in opt_comp.manifold:
-                print(th.abs(model_comp.int_matrix).max().item())
+        if epoch % 10 == 0:   
+            log.info(f'max coordinate: {th.abs(model.lt.weight.data).max().item()}')
+            log.info(f'fifth vertex: {model.lt.weight.data[5]}')
 
-        #if 'bugaenko6' in opt.manifold or 'group' in opt.manifold or 'vinberg17' in opt.manifold:
-        #	print(model.int_matrix.max().item(), model.int_matrix.min().item())
-
+        if 'bugaenko6' in opt.polytope or 'group' in opt.polytope or 'vinberg17' in opt.polytope or 'vinberg3' in opt.polytope:
+            log.info(f'max and min matrix coef: {model.int_matrix.max().item()}, {model.int_matrix.min().item()}')
+        
         epoch_loss.fill_(0)
         data.burnin = False
         t_start = timeit.default_timer()
-        lr = opt.lr        
+        lr = opt.lr 
         if epoch < opt.burnin:
             data.burnin = True
             lr = opt.lr * _lr_multiplier
+
+        #for every node i compute its new representation (v_i,M) where v_i is in the polytope and M is a matrix.
+        if opt.optimalisation == 'discrete':
+
+            #if epoch < opt.start_discrete we use rsgd and a tiling model (x,M).
+            if (epoch>opt.stre and (epoch-opt.stre)%opt.norevery==0 and epoch < opt.start_discrete) or epoch==0:
+                normalize(epoch, model, opt)
+
+            #for each vertex v, we copy to v the first colum of the matrix M_v
+            if epoch == opt.start_discrete:
+                normalize(epoch, model, opt)
+                model.lt.weight.data.copy_(model.int_matrix.narrow(2,0,1).squeeze())
+                
+        elif (opt.nor!='none' and epoch>opt.stre and (epoch-opt.stre)%opt.norevery==0) or epoch==0:
+            normalize(epoch, model, opt)
+            #d = model.int_matrix[0].size(0)
+            #G = th.eye(d)
+            #G[0,0] = -1
+            #print(model.int_matrix[0])
+            #print(model.int_matrix[0]@G@model.int_matrix[0].t())
+            #print(model.int_matrix[10])
+            #print(model.int_matrix[10]@G@model.int_matrix[10].t())
+
+        #print(model.lt.weight.data[0])
+        #print(model.lt.weight.data[10])
+        #print(LorentzManifold.ldot(model.lt.weight.data[10],model.lt.weight.data[10]))
+        #print(LorentzManifold.ldot(model.lt.weight.data[0],model.lt.weight.data[0]))
 
         loader_iter = tqdm(loader) if progress else loader
         for i_batch, (inputs, targets) in enumerate(loader_iter):
@@ -407,19 +371,22 @@ def train(
                 counts.clamp_(min=1).div_(inputs.size(0))
                 counts = counts.double().unsqueeze(-1)
 
-            optimizer.zero_grad()
-            preds = model(inputs)
-
             if model_comp:
                 optimizer_comp.zero_grad()
                 preds_comp = model_comp(inputs)
 
-            #print(preds)
+            if 'discrete' in opt.optimalisation and epoch >= opt.start_discrete:
+                vertices = inputs[:,0]
+                model.lt.weight.data[vertices], loss = best_nbr(model.lt.weight.data[inputs],opt.polytope,opt.dim)
+                
+            else:   
+                optimizer.zero_grad()
+                preds = model(inputs)
+                loss = model.loss(preds, targets, size_average=True)
+                loss.backward()            
+                if max_grad < th.abs(model.lt.weight.grad.to_dense().max()): max_grad = th.abs(model.lt.weight.grad.to_dense().max())
+                optimizer.step(lr, counts=counts)
 
-            loss = model.loss(preds, targets, size_average=True)
-            loss.backward()
-            if max_grad < th.abs(model.lt.weight.grad.to_dense().max()): max_grad = th.abs(model.lt.weight.grad.to_dense().max())
-            optimizer.step(lr=lr, counts=counts)
             epoch_loss[i_batch] = loss.cpu().item()
 
             if model_comp:
@@ -428,7 +395,7 @@ def train(
                 optimizer_comp.step(lr=lr, counts=counts)
                 epoch_loss_comp[i_batch] = loss_comp.cpu().item()
         
-        print(max_grad)
+        
         LOSS[epoch] = th.mean(epoch_loss).item()
 
         if model_comp:
@@ -438,6 +405,7 @@ def train(
                  f'"epoch": {epoch}, '
                  f'"elapsed": {elapsed}, '
                  f'"loss": {LOSS[epoch]}, '
+                 f'"max grad": {max_grad}'
                  '}')
 
         if model_comp:
@@ -445,41 +413,21 @@ def train(
                  f'"loss_comp": {LOSS_comp[epoch]}, '
                  '}')
 
-        if (opt.nor!='none' and epoch>opt.stre and (epoch-opt.stre)%opt.norevery==0) or epoch==0:
-            if opt.nor=='group':
-                NMD, NMD_int_matrix = normalize_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
-                model.int_matrix.data.copy_(NMD_int_matrix)
-                model.lt.weight.data.copy_(NMD)
-            elif opt.nor == 'bugaenko6':
-                NMD, NMD_int_matrix = normalize_bugaenko6_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
-               	model.int_matrix.data.copy_(NMD_int_matrix)
-               	model.lt.weight.data.copy_(NMD)
-            elif opt.nor == 'vinberg17':
-            	print('normalizuje!')
-            	NMD, NMD_int_matrix = normalize_vinberg17_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
-            	model.int_matrix.data.copy_(NMD_int_matrix)
-            	model.lt.weight.data.copy_(NMD)
-            elif opt.nor == 'vinberg3':
-                print('normalizuje!')
-                NMD, NMD_int_matrix = normalize_vinberg3_gmatrix(model.lt.weight.data.cpu().clone(), model.int_matrix.data.cpu().clone())
-                model.int_matrix.data.copy_(NMD_int_matrix)
-                model.lt.weight.data.copy_(NMD)
-            elif opt.nor == 'halfspace':
-                NMD = normalize_halfspace_matrix(model.lt.weight.data.clone())
-                model.lt.weight.data.copy_(NMD)
-        
-            #print(model.int_matrix.data)
-
         if (epoch+1)%opt.eval_each==0:
             manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
             if 'group' in opt.manifold:
                 meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
                 sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
-            elif 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg3' in opt.manifold:
-            	meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, g = model.g, lt_int_matrix = model.int_matrix.data.clone())
-            	sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
-            	imax = th.argmax(sqnorms).item()
-            	imin = th.argmin(sqnorms).item()
+            elif 'HyperbolicSpace' in opt.nor or 'bugaenko6' in opt.nor:
+                meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance, g = model.g, lt_int_matrix = model.int_matrix.data.clone())
+                sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
+            	
+                if opt.evaluate_int_coordinates:
+                    int_coordinates = model.int_matrix.data.clone().narrow(-1,0,1).squeeze()
+                    int_meanrank, int_maprank = eval_reconstruction(opt.adj, int_coordinates, LorentzManifold().distance)
+
+                #imax = th.argmax(sqnorms).item()
+            	#imin = th.argmin(sqnorms).item()
             else:
                 meanrank, maprank = eval_reconstruction(opt.adj, model.lt.weight.data.clone(), manifold.distance)
                 sqnorms = manifold.pnorm(model.lt.weight.data.clone())
@@ -498,45 +446,27 @@ def train(
                 '}'
             )
 
-        if model_comp:
-            if opt_comp.nor!='none' and epoch>opt_comp.stre and (epoch-opt_comp.stre)%opt_comp.norevery==0:
-                if opt_comp.nor == 'bugaenko6':
-                    NMD_comp, NMD_comp_int_matrix = normalize_bugaenko6_gmatrix(model_comp.lt.weight.data.cpu().clone(), model_comp.int_matrix.data.cpu().clone())
-                    model_comp.int_matrix.data.copy_(NMD_comp_int_matrix)
-                    model_comp.lt.weight.data.copy_(NMD_comp)
-                elif opt_comp.nor == 'vinberg17':
-                    print('normalising')
-                    NMD_comp, NMD_comp_int_matrix = normalize_vinberg17_gmatrix(model_comp.lt.weight.data.cpu().clone(), model_comp.int_matrix.data.cpu().clone())
-                    model_comp.int_matrix.data.copy_(NMD_comp_int_matrix)
-                    model_comp.lt.weight.data.copy_(NMD_comp)
-                elif opt_comp.nor == 'vinberg3':
-                    print('normalising')
-                    NMD_comp, NMD_comp_int_matrix = normalize_vinberg3_gmatrix(model_comp.lt.weight.data.cpu().clone(), model_comp.int_matrix.data.cpu().clone())
-                    model_comp.int_matrix.data.copy_(NMD_comp_int_matrix)
-                    model_comp.lt.weight.data.copy_(NMD_comp)
-                
-            if (epoch+1)%opt_comp.eval_each==0:
-                if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold or 'vinberg3' in opt_comp.manifold:
-                    meanrank_comp, maprank_comp = eval_reconstruction(opt_comp.adj, model_comp.lt.weight.data.clone(), manifold_comp.distance, g = model_comp.g, lt_int_matrix = model_comp.int_matrix.data.clone())
-                    sqnorms_comp = manifold.pnorm(model_comp.lt.weight.data.clone(), model_comp.int_matrix.data.clone())
-                    imax_comp = th.argmax(sqnorms_comp).item()
-                    imin_comp = th.argmin(sqnorms_comp).item()
-                else:
-                    meanrank_comp, maprank_comp = eval_reconstruction(opt_comp.adj, model_comp.lt.weight.data.clone(), manifold_comp.distance)
-                    sqnorms_comp = manifold.pnorm(model_comp.lt.weight.data.clone())
-
+            if opt.evaluate_int_coordinates:
                 log.info(
-                    'json_stats: {'
-                    f'"sqnorm_min_comp": {sqnorms_comp.min().item()}, '
-                    f'"sqnorm_avg_comp": {sqnorms_comp.mean().item()}, '
-                    f'"sqnorm_max_comp": {sqnorms_comp.max().item()}, '
-                    f'"mean_rank_comp": {meanrank_comp}, '
-                    f'"map_rank_comp": {maprank_comp}, '
-            '}'
-    )
-    
+                    f'"int_mean_rank": {int_meanrank}, '
+                    f'"int_map_rank": {int_maprank}, '
+                )
 
-    print('LOSS \n', LOSS)
+            #make_plot(epoch,model.lt.weight.data,opt)
+            
+
+    #print('LOSS \n', LOSS)
     
     if model_comp: 
         print('LOSS_comp \n', LOSS_comp)
+
+def make_plot(epoch,model_data,opt):
+    if (epoch+1)%500 == 0: 
+            data_in_ball = LorentzManifold().to_poincare_ball(model_data)
+            X = data_in_ball.narrow(-1,0,1).squeeze().numpy()
+            Y = data_in_ball.narrow(-1,1,1).squeeze().numpy()
+            plt.scatter(X,Y)
+            for v in opt.adj: 
+                for w in opt.adj[v]: 
+                    plt.plot([X[v],X[w]], [Y[v],Y[w]],color='blue')
+            plt.show()
