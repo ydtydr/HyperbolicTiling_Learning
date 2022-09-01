@@ -75,7 +75,7 @@ class Bugaenko6Manifold(Manifold):
         w.data.uniform_(-irange, irange)
         w.data[...,0] = th.sqrt((th.clamp(th.sum(w[...,1:] * w[...,1:], dim=-1),min=0) + 1)/(1+np.sqrt(2)))
 
-    def init_weights_int_matrix(self, w, faraway):
+    def init_weights_int_matrix(self, w, faraway, *kwargs):
         #faraway to do
         ID = th.zeros_like(w[0])
         for i in range(w.size(-1)): ID[0,i,i] = 1
