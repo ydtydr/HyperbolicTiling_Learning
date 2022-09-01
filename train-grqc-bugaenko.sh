@@ -16,8 +16,8 @@ python3 embed.py \
        -negs 50 \
        -burnin 20 \
        -ndproc 4 \
-       -manifold bugaenko6 \
-       -dset wordnet/grqc.csv \
+       -polytope bugaenko6 \
+       -dset wordnet/grqc_no_self.csv \
        -batchsize 10 \
        -eval_each 100 \
        -sparse \

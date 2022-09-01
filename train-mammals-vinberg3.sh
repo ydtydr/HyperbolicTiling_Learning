@@ -12,16 +12,15 @@ python3 embed.py \
        -gpu -1 \
        -dim 3 \
        -lr 0.3 \
-       -epochs 1000 \
+       -epochs 500 \
        -negs 50 \
        -burnin 1 \
        -ndproc 4 \
-       -polytope vinberg17 \
+       -polytope vinberg3 \
        -dset wordnet/mammal_closure.csv \
        -batchsize 10 \
-       -eval_each 100 \
-       -norevery 50 \
+       -eval_each 50 \
+       -norevery 10 \
        -sparse \
-       -train_threads 1 \
-       -no-maxnorm
+       -train_threads 1
 

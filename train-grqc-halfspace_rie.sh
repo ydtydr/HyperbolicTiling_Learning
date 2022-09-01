@@ -10,18 +10,16 @@
 
 python3 embed.py \
        -gpu -1 \
-       -dim 3 \
+       -dim 6 \
        -lr 0.3 \
        -epochs 1000 \
        -negs 50 \
-       -burnin 1 \
+       -burnin 20 \
        -ndproc 4 \
-       -polytope vinberg17 \
-       -dset wordnet/mammal_closure.csv \
+       -polytope halfspace_rie \
+       -dset wordnet/grqc.csv \
        -batchsize 10 \
        -eval_each 100 \
-       -norevery 50 \
        -sparse \
-       -train_threads 1 \
-       -no-maxnorm
+       -train_threads 2
 

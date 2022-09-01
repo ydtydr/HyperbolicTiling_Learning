@@ -19,12 +19,13 @@ from hype.lorentz_product import LorentzProductManifold
 from hype.group_rie import GroupRieManifold
 from hype.group_rie_high import GroupRiehighManifold
 from hype.bugaenko6 import Bugaenko6Manifold
-from hype.vinberg17 import Vinberg17Manifold
-from hype.vinberg3 import Vinberg3Manifold
+#from hype.vinberg17 import Vinberg17Manifold
+#from hype.vinberg3 import Vinberg3Manifold
 from hype.group_euc import GroupEucManifold
 from hype.halfspace_rie import HalfspaceRieManifold
 from hype.euclidean import EuclideanManifold
 from hype.poincare import PoincareManifold
+from hype.hyperbolicspace import HyperbolicSpace
 import sys
 import json
 import torch.multiprocessing as mp
@@ -33,8 +34,8 @@ import copy
 
 #wandb.init(project='tiling')
 
-th.manual_seed(42)
-np.random.seed(42)
+th.manual_seed(41)
+np.random.seed(41)
 
 
 MANIFOLDS = {
@@ -43,8 +44,9 @@ MANIFOLDS = {
     'group_rie': GroupRieManifold,
     'group_rie_high': GroupRiehighManifold,
     'bugaenko6': Bugaenko6Manifold,
-    'vinberg17': Vinberg17Manifold,
-    'vinberg3' : Vinberg3Manifold,
+    'vinberg17': HyperbolicSpace,
+    'vinberg3' : HyperbolicSpace,
+    'hyperbolic_cube' : HyperbolicSpace,
     'group_euc': GroupEucManifold,
     'halfspace_rie': HalfspaceRieManifold,
     'euclidean': EuclideanManifold,
@@ -69,8 +71,12 @@ def main():
                         help='Dataset identifier')
     parser.add_argument('-dim', type=int, default=20,
                         help='Embedding dimension')
-    parser.add_argument('-manifold', type=str, default='lorentz',
+    parser.add_argument('-polytope', type=str, default='lorentz',
                         choices=MANIFOLDS.keys(), help='Embedding manifold')
+    parser.add_argument('-optimalisation', type=str, default='rsgd', 
+                        help='discrete opt or rsgd')
+    parser.add_argument('-start_discrete', type=int, default=100, 
+                        help='start discrete algorithm after start_discrete epochs of a rsgd - needed for a good init')
     parser.add_argument('-lr', type=float, default=1000,
                         help='Learning rate')
     parser.add_argument('-epochs', type=int, default=100,
@@ -105,29 +111,42 @@ def main():
     parser.add_argument('-lr_type', choices=['scale', 'constant'], default='constant')
     parser.add_argument('-train_threads', type=int, default=1,
                         help='Number of threads to use in training')
-    parser.add_argument('-eval_embedding', default=False, help='path for the embedding to be evaluated')
-    parser.add_argument('-compare_with', required=False, help='creates a parallel model with the same initialization')
-    opt = parser.parse_args()
+    parser.add_argument('-eval_embedding', default=False, 
+                        help='path for the embedding to be evaluated')
+    parser.add_argument('-compare_with', required=False, 
+                        help='creates a parallel model with the same initialization')
+    parser.add_argument('-faraway', required=False, default=0, type=int, 
+                        help='initialize far away from the origin')
+    parser.add_argument('-evaluate_int_coordinates', required=False, default=False, type=int,
+                        help='for tilings puts all nodes in the closest centers of tilings and evaluates')
     
-    if 'group' in opt.manifold:
+    opt = parser.parse_args()
+
+    opt.manifold = opt.polytope 
+
+    if 'group' in opt.polytope:
         opt.nor = 'group'
         opt.norevery = 20
         opt.stre = 50
-    elif 'bugaenko6' in opt.manifold:
+    elif 'bugaenko6' in opt.polytope:
         opt.nor = 'bugaenko6'
         opt.stre = 0
-        opt.norevery = 10
-    elif 'vinberg17' in opt.manifold:
-        opt.nor = 'vinberg17'
+        opt.norevery = 50
+    elif 'vinberg17' in opt.polytope:
+        opt.nor = 'HyperbolicSpace' #'vinberg17'
         opt.stre = 0
         opt.norevery = 10
-    elif 'vinberg3' in opt.manifold:
-        opt.nor = 'vinberg3'
+    elif 'vinberg3' in opt.polytope:
+        opt.nor =  'HyperbolicSpace' #'vinberg3'
         opt.stre = 0
         opt.norevery = 10
-    elif 'halfspace' in opt.manifold:
+    elif 'hyperbolic_cube' in opt.polytope:
+        opt.nor = 'HyperbolicSpace'
+        opt.stre = 0
+        opt.norevery = 10
+    elif 'halfspace' in opt.polytope:
         opt.nor = 'halfspace'
-        opt.norevery = 1
+        opt.norevery = 10
         opt.stre = 0
     else:
         opt.nor = 'none'
@@ -135,7 +154,7 @@ def main():
     # setup debugging and logigng
     log_level = logging.DEBUG if opt.debug else logging.INFO
     log = logging.getLogger('tiling model')
-    logging.basicConfig(level=log_level, format='%(message)s', stream=sys.stdout)
+    logging.basicConfig(level=log_level, format='%(message)s', filename=f'results_{opt.manifold}.txt', filemode="w") #stream=sys.stdout
 
     # set default tensor type
     th.set_default_tensor_type('torch.DoubleTensor')####FloatTensor DoubleTensor
@@ -146,25 +165,6 @@ def main():
     # select manifold to optimize on
     manifold = MANIFOLDS[opt.manifold](debug=opt.debug, max_norm=opt.maxnorm)
     opt.dim = manifold.dim(opt.dim)
-
-    if opt.compare_with: 
-        if opt.compare_with == 'bugaenko6':
-            opt_comp = copy.deepcopy(opt)
-            opt_comp.manifold = 'bugaenko6'
-            opt_comp.nor = 'bugaenko6'
-            opt_comp.stre = 0
-            opt_comp.norevery = 10
-            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
-        elif opt.compare_with == 'vinberg17':
-            opt_comp = copy.deepcopy(opt)
-            opt_comp.manifold = 'vinberg17'
-            opt_comp.nor = 'vinberg17'
-            opt_comp.stre = 0
-            opt_comp.norevery = 10
-            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
-        elif opt.compare_with == 'lorentz':
-            opt_comp = copy.deepcopy(opt)
-            manifold_comp = MANIFOLDS[opt_comp.manifold](debug=opt_comp.debug, max_norm=opt_comp.maxnorm)
 
     if 'csv' in opt.dset:
         log.info('Using edge list dataloader')
@@ -186,10 +186,10 @@ def main():
         log.info('Setting up dataset...')
         data = AdjacencyDataset(dset, opt.negs, opt.batchsize, opt.ndproc,
             opt.burnin > 0, sample_dampening=opt.dampening)
-        model = Embedding(data.N, opt.dim, manifold, sparse=opt.sparse)
+        model = Embedding(data.N, opt.dim, manifold, device, opt.optimalisation, sparse=opt.sparse)
         
         if opt.compare_with:
-            model_comp = Embedding(data.N, opt_comp.dim, manifold_comp, sparse=opt.sparse)    
+            model_comp = Embedding(data.N, opt_comp.dim, manifold_comp, device, opt.optimalisation, sparse=opt.sparse)    
 
             #model_comp has the same initialisation as model
             model_comp.lt.weight.data = model.lt.weight.data.detach().clone()
@@ -225,7 +225,7 @@ def main():
     if not opt.eval_embedding:
         opt.adj = adj
         model = model.to(device)
-
+    
         if opt.compare_with:
             opt_comp.adj = adj
             model_comp = model_comp.to(device)
@@ -240,7 +240,8 @@ def main():
         if opt.train_threads > 1: #if compare_with not none, we asume train_threads = 1
             threads = []
             model = model.share_memory()
-            if 'group' in opt.manifold or 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg3' in opt.manifold:
+            #if 'group' in opt.manifold or 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg3' in opt.manifold or 'HyperbolicSpace' in opt.nor:
+            if 'group' in opt.manifold or 'HyperbolicSpace' in opt.nor:
                 model.int_matrix.share_memory_()
             args = (device, model, data, optimizer, opt, log)
             kwargs = {'progress' : not opt.quiet}
@@ -255,26 +256,20 @@ def main():
                 train.train(device, model, data, optimizer, opt, log, progress=not opt.quiet)
     else:
         model = th.load(opt.eval_embedding, map_location='cpu')['embeddings']
-    
+
     #evaluation
     if 'group' in opt.manifold:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
-    elif 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg17' in opt.manifold: 
+    #elif 'bugaenko6' in opt.manifold or 'vinberg17' in opt.manifold or 'vinberg17' in opt.manifold or 'HyperbolicSpace' in opt.nor: 
+    elif 'HyperbolicSpace' in opt.nor or 'bugaenko6' in opt.nor: 
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance, g = model.g, lt_int_matrix = model.int_matrix.data.clone())
         sqnorms = manifold.pnorm(model.lt.weight.data.clone(), model.int_matrix.data.clone())
+
     else:
         meanrank, maprank = eval_reconstruction(adj, model.lt.weight.data.clone(), manifold.distance)
         sqnorms = manifold.pnorm(model.lt.weight.data.clone())
     
-    if opt.compare_with:
-        if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold: 
-            meanrank_comp, maprank_comp = eval_reconstruction(adj, model_comp.lt.weight.data.clone(), manifold_comp.distance, g = model_comp.g, lt_int_matrix = model_comp.int_matrix.data.clone())
-            sqnorms_comp = manifold_comp.pnorm(model_comp.lt.weight.data.clone(), model_comp.int_matrix.data.clone())
-        else:
-            meanrank_comp, maprank_comp = eval_reconstruction(adj, model_comp.lt.weight.data.clone(), manifold_comp.distance)
-            sqnorms_comp = manifold.pnorm(model_comp.lt.weight.data.clone())
-
     log.info(
         'json_stats: {'
         f'"sqnorm_min": {sqnorms.min().item()}, '
@@ -285,24 +280,8 @@ def main():
         '}'
     )
 
-    if opt.compare_with:
-        log.info(
-            'json_stats: {'
-            f'"sqnorm_min_comp": {sqnorms_comp.min().item()}, '
-            f'"sqnorm_avg_comp": {sqnorms_comp.mean().item()}, '
-            f'"sqnorm_max_comp": {sqnorms_comp.max().item()}, '
-            f'"mean_rank_comp": {meanrank_comp}, '
-            f'"map_rank_comp": {maprank_comp}, '
-            '}'
-    )
     
-    th.save(model, 'entire_model.pth')
-
-    if opt.compare_with:
-        th.save(model_comp, 'entire_model_comp.pth')
-
-        if 'bugaenko6' in opt_comp.manifold or 'vinberg17' in opt_comp.manifold:
-            th.save(model_comp.int_matrix.data, 'model_comp_matrx.pt')
+    th.save(model, f'results_{opt.manifold}_model.pth')
 
 if __name__ == '__main__':
     main()

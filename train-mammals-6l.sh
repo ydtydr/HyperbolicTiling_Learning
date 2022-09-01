@@ -12,16 +12,14 @@ python3 embed.py \
        -gpu -1 \
        -dim 3 \
        -lr 0.3 \
-       -epochs 1000 \
+       -epochs 500 \
        -negs 50 \
-       -burnin 1 \
+       -burnin 10 \
        -ndproc 4 \
-       -polytope vinberg17 \
+       -manifold lorentz \
        -dset wordnet/mammal_closure.csv \
        -batchsize 10 \
        -eval_each 100 \
-       -norevery 50 \
        -sparse \
-       -train_threads 1 \
-       -no-maxnorm
+       -train_threads 1
 
