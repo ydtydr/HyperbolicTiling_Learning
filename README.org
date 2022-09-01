@@ -11,4 +11,4 @@ The 17 and 3 dimensional Vinberg's polytope are not compact but have finite volu
 
 ** Example: Embedding WordNet Mammals
 
-This shell scripts =train-mammals-vinberg17.sh=, =train-verbs-bugaenko6.sh=, =train-cora.sh= include the appropriate parameter settings for training on mammals, verbs and cora datasets using the new tiling-based models. 
+This shell scripts =train-cora-vinberg3=, =train-mammals-vinberg17.sh=, =train-grqc-bugaenko.sh=, include the appropriate parameter settings for training on mammals, grqc and cora datasets using the new tiling-based models. 
