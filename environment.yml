@@ -12,3 +12,4 @@ dependencies:
 - h5py
 - cython
 - tqdm
+- matplotlib
