@@ -10,7 +10,7 @@
 
 python3 embed.py \
        -gpu -1 \
-       -dim 3 \
+       -dim 17 \
        -lr 0.3 \
        -epochs 1000 \
        -negs 50 \
