@@ -15,7 +15,7 @@ python3 embed.py \
        -negs 50 \
        -burnin 20 \
        -ndproc 4 \
-       -manifold group_rie \
+       -polytope group_rie \
        -dset wordnet/grqc.csv \
        -batchsize 10 \
        -eval_each 100 \
