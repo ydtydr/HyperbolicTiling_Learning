@@ -21,4 +21,5 @@ python3 embed.py \
        -eval_each 100 \
        -train_threads 1 \
        -sparse \
-       -no-maxnorm
+       -no-maxnorm \
+       -faraway 10000
