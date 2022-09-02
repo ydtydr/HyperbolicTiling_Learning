@@ -16,7 +16,7 @@ python3 embed.py \
        -negs 50 \
        -burnin 10 \
        -ndproc 4 \
-       -manifold lorentz \
+       -polytope lorentz \
        -dset wordnet/mammal_closure.csv \
        -batchsize 10 \
        -eval_each 100 \
