@@ -116,7 +116,7 @@ def main():
     parser.add_argument('-compare_with', required=False, 
                         help='creates a parallel model with the same initialization')
     parser.add_argument('-faraway', required=False, default=0, type=int, 
-                        help='initialize far away from the origin')
+                        help='initialize vertices far away from the origin: all except the first coordinates are close to -faraway')
     parser.add_argument('-evaluate_int_coordinates', required=False, default=False, type=int,
                         help='for tilings puts all nodes in the closest centers of tilings and evaluates')
     
