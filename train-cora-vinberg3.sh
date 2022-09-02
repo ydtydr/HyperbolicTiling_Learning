@@ -15,7 +15,7 @@ python3 embed.py \
        -negs 50 \
        -burnin 10 \
        -ndproc 4 \
-       -manifold vinberg3 \
+       -polytope vinberg3 \
        -dset cora/cora_closure.csv \
        -batchsize 50 \
        -eval_each 100 \
