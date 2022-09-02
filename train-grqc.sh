@@ -16,7 +16,7 @@ python3 embed.py \
        -burnin 20 \
        -ndproc 4 \
        -polytope group_rie \
-       -dset wordnet/grqc.csv \
+       -dset wordnet/grqc_no_self.csv \
        -batchsize 10 \
        -eval_each 100 \
        -sparse \
