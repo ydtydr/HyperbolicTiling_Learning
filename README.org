@@ -15,8 +15,10 @@ This shell scripts =train-cora-vinberg3=, =train-mammals-vinberg17.sh=, =train-g
 
 ** Installing: 
 
+#+BEGIN_SRC sh
 git clone https://github.com/mic-marcinkowski/HyperbolicTiling_Learning.git
 cd HyperbolicTiling_Learning
 conda env create -f environment.yml
 source activate tiling
 python setup.py build_ext --inplace
+#+END_SRC sh
