@@ -16,7 +16,7 @@ python3 embed.py \
        -negs 50 \
        -burnin 20 \
        -ndproc 4 \
-       -manifold bugaenko6 \
+       -polytope bugaenko6 \
        -dset wordnet/verb_closure.csv \
        -batchsize 10 \
        -eval_each 100 \
