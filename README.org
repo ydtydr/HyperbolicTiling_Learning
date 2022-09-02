@@ -8,6 +8,8 @@ the 3 and 17 dimensionals model based on the polytopes found by Vinberg and the 
 The Bugenko's polytope are compact.
 The 17 and 3 dimensional Vinberg's polytope are not compact but have finite volume.
 
+There are some new options added, e.g:\\
+-faraway : initilizes vertices with all (except the first) coordinates close to faraway. 
 
 ** Example: 
 
